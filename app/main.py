@@ -4,7 +4,7 @@ app = FastAPI(title="Sentinel Upload API")
 
 ALLOWED_CONTENT_TYPES = {
     "text/plain",
-    "text/markdown ",
+    "text/markdown",
     "application/pdf",
     "image/png",
     "image/jpeg",
