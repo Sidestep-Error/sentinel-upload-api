@@ -138,3 +138,21 @@ Branchar ska vara små och kortlivade.
 Namnge PR med prefix: feat:, fix:, sec:, k8s:, docs:.
 
 En person är merge captain per vecka (roterar), som ser till att inget fastnar.
+
+---
+
+Kort cheat-sheet (teamet)
+
+- Starta alltid från remote main:
+  - git fetch origin
+  - git checkout -b feat/<kort-namn> origin/main
+- Jobba och committa smått:
+  - git status -sb
+  - git add <filer>
+  - git commit -m "feat: kort beskrivning"
+- Pusha och skapa PR:
+  - git push -u origin feat/<kort-namn>
+- Om "entirely different commit histories" uppstår:
+  - Skapa ny branch från origin/main
+  - Kopiera in filer från din gamla branch
+  - Commit + push → PR
