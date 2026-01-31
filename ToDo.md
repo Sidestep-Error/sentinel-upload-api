@@ -4,6 +4,7 @@
 - [x] Add Trivy image scan in CI (fail on HIGH/CRITICAL)
 - [ ] Add dependency scanning (pip-audit or Trivy fs)
 - [x] Generate SBOM (Syft) and store as CI artifact
+- [x] Switch base image to Alpine to reduce OS CVEs
 - [ ] Sign images with Cosign (bonus)
 - [ ] Add Kubernetes manifests (Deployment, Service, Ingress)
 - [ ] Gatekeeper policies: no :latest, non-root, resource limits, labels, readOnlyRootFilesystem

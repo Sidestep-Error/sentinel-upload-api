@@ -22,3 +22,4 @@ Out of scope:
 
 - Container image scanning with Trivy (fail on HIGH/CRITICAL)
 - SBOM generation with Syft (SPDX JSON artifact)
+- Base image hardened (Alpine)
