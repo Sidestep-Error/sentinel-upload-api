@@ -6,6 +6,9 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# Uppdatera OS-paket för säkerhetsfixar
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+
 # Skapa en icke-root user
 RUN addgroup --system app && adduser --system --ingroup app app
 
