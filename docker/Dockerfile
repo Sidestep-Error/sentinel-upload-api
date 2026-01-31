@@ -1,16 +1,16 @@
 # syntax=docker/dockerfile:1
 
-FROM python:3.12-slim-bookworm
+FROM python:3.12-alpine
 
 # Bas-säkerhet: mindre attackyta + stabilt beteende
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 # Uppdatera OS-paket för säkerhetsfixar
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+RUN apk update && apk upgrade
 
 # Skapa en icke-root user
-RUN addgroup --system app && adduser --system --ingroup app app
+RUN addgroup -S app && adduser -S app -G app
 
 WORKDIR /app
 
