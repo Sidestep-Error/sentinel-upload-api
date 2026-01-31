@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Docker image (no push)
         run: |
-          docker build -f docker/Dockerfile -t sentinel-upload-api:ci .
+          docker build --pull --no-cache -f docker/Dockerfile -t sentinel-upload-api:ci .
 
       - name: Trivy scan (HIGH/CRITICAL)
         run: |
