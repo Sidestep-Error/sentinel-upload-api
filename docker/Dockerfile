@@ -20,7 +20,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Kopiera appkod + tester (för att kunna köra containern lokalt med samma innehåll)
 COPY app/ /app/app/
-COPY tests/ /app/tests/
 
 # Byt till non-root
 USER app

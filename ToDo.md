@@ -3,6 +3,7 @@
 - [ ] Add bug-report button in UI (link to GitHub Issues)
 - [x] Add Trivy image scan in CI (fail on HIGH/CRITICAL)
 - [ ] Add dependency scanning (pip-audit or Trivy fs)
+- [ ] Add file-scanning for malicious code to uploaded files
 - [x] Generate SBOM (Syft) and store as CI artifact
 - [x] Switch base image to Alpine to reduce OS CVEs
 - [ ] Add MongoDB storage for upload metadata

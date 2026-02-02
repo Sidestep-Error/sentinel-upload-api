@@ -33,6 +33,7 @@ UI
 - Logo asset: app/static/assets/sidestep-logo.png
 - Use the UI upload console to test /upload.
 - Uploaded Files list is populated when MongoDB is running.
+- File picker handling is hardened to avoid double-open issues on some browsers/clients.
 
 MongoDB
 
