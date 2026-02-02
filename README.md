@@ -13,6 +13,7 @@ Docs index
 - runbooks/upload-api-unavailable.md
 - sre/postmortem-template.md
 - ToDo.md
+- CHANGELOG.md
 
 Run locally (Docker)
 
