@@ -1,21 +1,34 @@
 services:
   mongo:
     image: mongo:7
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_ROOT_USERNAME:-sentinel}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD:-change-me}
     ports:
-      - "27017:27017"
+      - "${MONGO_HOST_PORT:-28017}:27017"
     volumes:
       - mongo_data:/data/db
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet -u $$MONGO_INITDB_ROOT_USERNAME -p $$MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile
     environment:
-      - MONGODB_URI=mongodb://mongo:27017/sentinel_upload
+      - MONGODB_URI=mongodb://${MONGO_ROOT_USERNAME:-sentinel}:${MONGO_ROOT_PASSWORD:-change-me}@mongo:27017/${MONGO_DB:-sentinel_upload}?authSource=admin
     ports:
       - "8000:8000"
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
 
 volumes:
   mongo_data:

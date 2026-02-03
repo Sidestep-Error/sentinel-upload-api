@@ -5,7 +5,7 @@
 - [ ] Add dependency scanning (pip-audit or Trivy fs)
 - [x] Generate SBOM (Syft) and store as CI artifact
 - [x] Switch base image to Alpine to reduce OS CVEs
-- [ ] Add MongoDB storage for upload metadata
+- [x] Add MongoDB storage for upload metadata
 - [ ] Sign images with Cosign (bonus)
 - [ ] Add Kubernetes manifests (Deployment, Service, Ingress)
 - [ ] Gatekeeper policies: no :latest, non-root, resource limits, labels, readOnlyRootFilesystem
@@ -14,5 +14,6 @@
 - [ ] Set up monitoring (Prometheus/Grafana) and logging
 - [ ] Write incident runbook for upload API unavailable
 - [ ] Fill in shared responsibility model and cost notes
-- [ ] Change Mongo port fom 27017 to 28017 since 27017 is blocked by HyperV
+- [x] Change Mongo port fom 27017 to 28017 since 27017 is blocked by HyperV
+- [ ] Add Firebase Auth + FastAPI tokencheck
 
