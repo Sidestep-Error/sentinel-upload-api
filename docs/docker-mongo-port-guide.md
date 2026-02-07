@@ -48,7 +48,7 @@ services:
 
 - `mongo:27017` is internal container networking and should normally stay unchanged.
 - `28017` is only the host machine port and can be changed to any free port.
-- Keep credentials in `.env` (copy from `.env.example`), not hardcoded in compose.
+- Keep credentials in `.env` (copy from `.env.local.example` or `.env.atlas.example`), not hardcoded in compose.
 - If you connect to MongoDB from your host tools (for example MongoDB Compass), use `localhost:28017`.
 
 ## Verification
@@ -56,8 +56,8 @@ services:
 ```powershell
 docker compose down
 docker compose up --build
-curl -F "file=@README.md;type=text/markdown" http://localhost:8000/upload
-curl http://localhost:8000/uploads
+curl -F "file=@README.md;type=text/markdown" http://localhost:8080/upload
+curl http://localhost:8080/uploads
 ```
 
 Expected:

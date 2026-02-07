@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 2026-02-07
+
+- Added Nginx reverse proxy service in Docker Compose as public entrypoint (`NGINX_HOST_PORT`).
+- Added Atlas/local environment mode templates (`.env.atlas.example`, `.env.local.example`).
+- Updated app startup to respect `PORT` for Render compatibility.
+- Improved Mongo DB selection fallback in `app/db.py` when URI has no default database path.
+- Updated deployment docs for Docker Compose, Atlas usage, and Render flow.
+
 ## 2026-02-03
 
 - Implemented MongoDB-backed upload metadata flow in the API (`/upload` stores metadata, `/uploads` lists records).
