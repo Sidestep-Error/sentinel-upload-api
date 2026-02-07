@@ -4,6 +4,15 @@
 
 Avoid host port conflicts (for example with Hyper-V) while keeping container-to-container communication stable.
 
+## Environment modes
+
+- Local Docker Mongo mode:
+  - Use `.env.local.example` as template for `.env`.
+  - Keep `MONGODB_URI` unset/commented.
+- Atlas mode:
+  - Use `.env.atlas.example` as template for `.env`.
+  - Set `MONGODB_URI` to your Atlas `mongodb+srv://...` value.
+
 ## Why this is the best approach
 
 - It separates host concerns from container networking.
