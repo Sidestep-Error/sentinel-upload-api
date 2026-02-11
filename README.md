@@ -15,7 +15,12 @@ Docs index
 - sre/postmortem-template.md
 - ToDo.md
 - CHANGELOG.md
+Git flow policy
 
+- Default branch is `main` (stable/deployed).
+- Ongoing development is done in `develop` and `feat/*` branches.
+- Use PR + CI + review before merging.
+- Merge `develop` -> `main` only for release-ready changes.
 Run locally (Docker)
 
 ```powershell
@@ -130,3 +135,5 @@ uvicorn app.main:app --reload
 ```json
 {"filename":"README.md","content_type":"text/markdown","status":"accepted"}
 ```
+
+
