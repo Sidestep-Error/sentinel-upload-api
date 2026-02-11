@@ -54,6 +54,12 @@ Nginx reverse proxy
 - FastAPI is internal-only in the compose network.
 - Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
 
+Nginx reverse proxy
+
+- Nginx is now the public entrypoint in docker compose.
+- FastAPI is internal-only in the compose network.
+- Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
+
 MongoDB
 
 - Local mode: keep `MONGODB_URI` unset/commented so app uses local Mongo service.
