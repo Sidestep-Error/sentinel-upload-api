@@ -91,6 +91,12 @@ Upload (PowerShell)
 curl -F "file=@README.md;type=text/markdown" http://localhost:8080/upload
 ```
 
+Upload scanning behavior
+
+- Files are scanned in-memory with a mock scanner (no file content is persisted).
+- MongoDB stores upload metadata and scan outcome (`scan_status`, `scan_engine`, `scan_detail`).
+- Current scanner flags EICAR marker and suspicious filename patterns.
+
 Publish on a subdomain (production outline)
 
 1. Create DNS record:

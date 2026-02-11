@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2026-02-11
+
+- Added an upload mock scanner (`app/scanner.py`) to detect malicious signatures without storing file content.
+- Extended upload metadata model with scan fields (`scan_status`, `scan_engine`, `scan_detail`).
+- Updated `/upload` flow to scan in memory, enforce max file size, and persist scan result metadata in MongoDB.
+- Added upload tests for clean and malicious file paths.
+
 ## 2026-02-07
 
 - Added Nginx reverse proxy service in Docker Compose as public entrypoint (`NGINX_HOST_PORT`).

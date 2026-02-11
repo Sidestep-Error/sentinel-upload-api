@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.db import get_db
 from app.models import UploadRecord
+from app.scanner import scan_bytes
 
 app = FastAPI(title="Sentinel Upload API")
 
@@ -21,6 +22,7 @@ ALLOWED_CONTENT_TYPES = {
     "image/png",
     "image/jpeg",
 }
+MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
 @app.get("/health")
@@ -38,10 +40,20 @@ async def upload(file: UploadFile = File(...)):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported file type")
 
+    content = await file.read()
+    if len(content) > MAX_FILE_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="File too large")
+
+    scan = scan_bytes(file.filename or "unknown", content)
+    status = "accepted" if scan.status == "clean" else "rejected"
+
     record = UploadRecord(
         filename=file.filename,
         content_type=file.content_type,
-        status="accepted",
+        status=status,
+        scan_status=scan.status,
+        scan_engine=scan.engine,
+        scan_detail=scan.detail,
     )
 
     db_status = "skipped"
@@ -56,7 +68,10 @@ async def upload(file: UploadFile = File(...)):
     return {
         "filename": file.filename,
         "content_type": file.content_type,
-        "status": "accepted",
+        "status": status,
+        "scan_status": scan.status,
+        "scan_engine": scan.engine,
+        "scan_detail": scan.detail,
         "db_status": db_status,
     }
 
