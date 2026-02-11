@@ -5,7 +5,10 @@
 - [ ] Add dependency scanning (pip-audit or Trivy fs)
 - [x] Generate SBOM (Syft) and store as CI artifact
 - [x] Switch base image to Alpine to reduce OS CVEs
-- [ ] Add MongoDB storage for upload metadata
+- [x] Add MongoDB storage for upload metadata
+- [x] Add file-scanning for malicious code to uploaded files (mock scanner)
+- [x] Integrate ClamAV scanner service (auto mode with mock fallback)
+- [x] Enforce fail-closed policy when scanner is unavailable
 - [ ] Sign images with Cosign (bonus)
 - [ ] Add Kubernetes manifests (Deployment, Service, Ingress)
 - [ ] Gatekeeper policies: no :latest, non-root, resource limits, labels, readOnlyRootFilesystem
@@ -14,5 +17,6 @@
 - [ ] Set up monitoring (Prometheus/Grafana) and logging
 - [ ] Write incident runbook for upload API unavailable
 - [ ] Fill in shared responsibility model and cost notes
-- [ ] Ändra Mongo port från 27017 till 28017 då 27017 är blockerad av HyperV
+- [x] Change Mongo port fom 27017 to 28017 since 27017 is blocked by HyperV
+- [ ] Add Firebase Auth + FastAPI tokencheck
 
