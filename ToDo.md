@@ -7,7 +7,8 @@
 - [x] Switch base image to Alpine to reduce OS CVEs
 - [x] Add MongoDB storage for upload metadata
 - [x] Add file-scanning for malicious code to uploaded files (mock scanner)
-- [ ] Integrate ClamAV scanner service and enforce fail-closed policy
+- [x] Integrate ClamAV scanner service (auto mode with mock fallback)
+- [ ] Enforce fail-closed policy when scanner is unavailable
 - [ ] Sign images with Cosign (bonus)
 - [ ] Add Kubernetes manifests (Deployment, Service, Ingress)
 - [ ] Gatekeeper policies: no :latest, non-root, resource limits, labels, readOnlyRootFilesystem

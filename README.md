@@ -93,9 +93,12 @@ curl -F "file=@README.md;type=text/markdown" http://localhost:8080/upload
 
 Upload scanning behavior
 
-- Files are scanned in-memory with a mock scanner (no file content is persisted).
+- Files are scanned in-memory (no file content is persisted).
 - MongoDB stores upload metadata and scan outcome (`scan_status`, `scan_engine`, `scan_detail`).
-- Current scanner flags EICAR marker and suspicious filename patterns.
+- `SCANNER_MODE=auto` (default): try ClamAV first, fallback to mock scanner if ClamAV is unavailable.
+- `SCANNER_MODE=clamav`: require ClamAV.
+- `SCANNER_MODE=mock`: mock scanner only.
+- Mock scanner flags EICAR marker and suspicious filename patterns.
 
 Publish on a subdomain (production outline)
 
