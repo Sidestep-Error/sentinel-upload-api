@@ -6,7 +6,8 @@
 - Added ClamAV service integration in Docker Compose with scanner modes (`auto`, `clamav`, `mock`).
 - Extended upload metadata model with scan fields (`scan_status`, `scan_engine`, `scan_detail`).
 - Updated `/upload` flow to scan in memory, enforce max file size, and persist scan result metadata in MongoDB.
-- Added upload tests for clean and malicious file paths.
+- Enforced fail-closed upload policy for scanner errors (`status=rejected` when `scan_status=error`).
+- Added upload tests for clean, malicious, and scanner-error paths.
 
 ## 2026-02-07
 

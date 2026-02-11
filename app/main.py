@@ -45,6 +45,7 @@ async def upload(file: UploadFile = File(...)):
         raise HTTPException(status_code=413, detail="File too large")
 
     scan = scan_bytes(file.filename or "unknown", content)
+    # Fail-closed: scanner errors are treated as rejected uploads.
     status = "accepted" if scan.status == "clean" else "rejected"
 
     record = UploadRecord(

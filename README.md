@@ -99,6 +99,7 @@ Upload scanning behavior
 - `SCANNER_MODE=clamav`: require ClamAV.
 - `SCANNER_MODE=mock`: mock scanner only.
 - Mock scanner flags EICAR marker and suspicious filename patterns.
+- Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
 
 Publish on a subdomain (production outline)
 
