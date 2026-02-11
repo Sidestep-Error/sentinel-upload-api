@@ -15,20 +15,7 @@ Docs index
 - sre/postmortem-template.md
 - ToDo.md
 - CHANGELOG.md
-Git flow policy
 
-- Default branch is `main` (stable/deployed).
-- Ongoing development is done in `develop` and `feat/*` branches.
-- Use PR + CI + review before merging.
-- Merge `develop` -> `main` only for release-ready changes.
-
-CI pipeline
-
-- Triggers on pull requests and pushes to main and develop.
-- Runs linting with uff (uff check app tests).
-- Runs tests with pytest.
-- Runs matrix tests on Python 3.11 and 3.12.
-- Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
 Run locally (Docker)
 
 ```powershell
@@ -59,6 +46,13 @@ UI
 - Logo asset: app/static/assets/sidestep-logo.png
 - Use the UI upload console to test /upload.
 - Uploaded Files list is populated when MongoDB is running.
+- Hosted demo (Render): https://sentinel-upload-api.onrender.com/
+
+Nginx reverse proxy
+
+- Nginx is now the public entrypoint in docker compose.
+- FastAPI is internal-only in the compose network.
+- Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
 
 Nginx reverse proxy
 
@@ -111,6 +105,8 @@ Upload scanning behavior
 - `SCANNER_MODE=auto` (default): try ClamAV first, fallback to mock scanner if ClamAV is unavailable.
 - `SCANNER_MODE=clamav`: require ClamAV.
 - `SCANNER_MODE=mock`: mock scanner only.
+- Render free tier runs with `SCANNER_MODE=mock` (no private ClamAV service).
+- Use local Docker Compose or Kubernetes when you need full ClamAV runtime scans.
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
 
@@ -143,6 +139,7 @@ uvicorn app.main:app --reload
 ```json
 {"filename":"README.md","content_type":"text/markdown","status":"accepted"}
 ```
+
 
 
 
