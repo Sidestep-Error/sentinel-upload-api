@@ -15,7 +15,20 @@ Docs index
 - sre/postmortem-template.md
 - ToDo.md
 - CHANGELOG.md
+Git flow policy
 
+- Default branch is `main` (stable/deployed).
+- Ongoing development is done in `develop` and `feat/*` branches.
+- Use PR + CI + review before merging.
+- Merge `develop` -> `main` only for release-ready changes.
+
+CI pipeline
+
+- Triggers on pull requests and pushes to main and develop.
+- Runs linting with uff (uff check app tests).
+- Runs tests with pytest.
+- Runs matrix tests on Python 3.11 and 3.12.
+- Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
 Run locally (Docker)
 
 ```powershell
@@ -130,3 +143,6 @@ uvicorn app.main:app --reload
 ```json
 {"filename":"README.md","content_type":"text/markdown","status":"accepted"}
 ```
+
+
+

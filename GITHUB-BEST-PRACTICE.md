@@ -160,3 +160,12 @@ En person är merge captain per vecka (roterar), som ser till att inget fastnar.
   - Skapa ny branch från origin/main
   - Kopiera in filer från din gamla branch
   - Commit + push → PR
+
+## Branch policy (current)
+
+- Default branch: `main`
+- `main` is protected and treated as production-ready ("helig").
+- Active development happens in `develop` and short-lived `feat/*` branches.
+- Pull requests should normally target `develop` during ongoing work.
+- Release flow: PR from `develop` to `main` after CI is green and at least one approval.
+- No direct pushes to `main`.
