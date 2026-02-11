@@ -2,6 +2,7 @@ from functools import lru_cache
 import os
 
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import ConfigurationError
 
 
 @lru_cache
@@ -15,5 +16,10 @@ def get_mongo_client() -> AsyncIOMotorClient:
 
 
 def get_db():
-    # Database name comes from the URI path.
-    return get_mongo_client().get_default_database()
+    client = get_mongo_client()
+    try:
+        # Preferred: database name in URI path (e.g. ...mongodb.net/sentinel_upload)
+        return client.get_default_database()
+    except ConfigurationError:
+        # Fallback for URIs without db path.
+        return client.get_database(os.getenv("MONGO_DB", "sentinel_upload"))
