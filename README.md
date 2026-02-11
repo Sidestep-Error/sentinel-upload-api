@@ -1,5 +1,7 @@
 Sentinel Upload API
 
+![CI Status](https://github.com/Sidestep-Error/sentinel-upload-api/actions/workflows/ci.yml/badge.svg)
+
 Minimal FastAPI app for secure file upload handling.
 
 Docs index
@@ -24,11 +26,14 @@ Git flow policy
 
 CI pipeline
 
-- Triggers on pull requests and pushes to main and develop.
-- Runs linting with uff (uff check app tests).
-- Runs tests with pytest.
-- Runs matrix tests on Python 3.11 and 3.12.
+- Triggers on pull requests and pushes to `main` and `develop`.
+- Runs linting with `ruff` (`ruff check app tests`).
+- Runs tests with `pytest`.
+- Runs matrix tests on Python `3.11` and `3.12`.
 - Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
+- Pushes Docker image to Docker Hub on `main` pushes after all checks pass.
+- Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `sidesteperror/sentinel-upload-api`).
+
 Run locally (Docker)
 
 ```powershell
@@ -143,6 +148,7 @@ uvicorn app.main:app --reload
 ```json
 {"filename":"README.md","content_type":"text/markdown","status":"accepted"}
 ```
+
 
 
 
