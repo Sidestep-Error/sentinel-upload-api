@@ -40,6 +40,20 @@ jobs:
         run: |
           ruff check app tests
 
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+
+      - name: Validate Kubernetes base manifests (dry-run)
+        run: |
+          kubectl apply --dry-run=client --validate=false -f k8s/base/
+
+      - name: Validate Gatekeeper templates and constraints (dry-run)
+        run: |
+          kubectl apply --dry-run=client --validate=false -f k8s/gatekeeper/constrainttemplates/
+          kubectl apply --dry-run=client --validate=false -f k8s/gatekeeper/constraints/
+
       - name: Run tests
         run: |
           pytest -q

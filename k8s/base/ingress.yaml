@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sentinel-upload-api
+  labels:
+    app.kubernetes.io/name: sentinel-upload-api
+    app.kubernetes.io/part-of: sentinel-platform
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sentinel-upload-api.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sentinel-upload-api
+                port:
+                  number: 80
