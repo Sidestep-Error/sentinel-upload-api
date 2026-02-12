@@ -29,7 +29,7 @@ CI pipeline
 - Triggers on pull requests and pushes to `main` and `develop`.
 - Runs dependency vulnerability scanning with `pip-audit` on `app/requirements.txt`.
 - Runs linting with `ruff` (`ruff check app tests`).
-- Validates Kubernetes and Gatekeeper manifests using `kubectl apply --dry-run=client`.
+- Validates Kubernetes and Gatekeeper manifests using `kubeconform`.
 - Runs tests with `pytest`.
 - Runs matrix tests on Python `3.11` and `3.12`.
 - Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
