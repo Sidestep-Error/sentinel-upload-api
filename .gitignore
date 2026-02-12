@@ -19,3 +19,8 @@ build/
 
 *.log
 .DS_Store
+
+# Local secrets and credential dumps
+Credentials/
+*.firebase-adminsdk-*.json
+*service-account*.json

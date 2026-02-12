@@ -144,6 +144,10 @@ main {
   box-shadow: 0 0 24px rgba(54, 255, 122, 0.3);
 }
 
+button.button {
+  cursor: pointer;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--stroke);
@@ -155,6 +159,22 @@ main {
 .upload {
   display: grid;
   gap: 16px;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.auth-grid input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(54, 255, 122, 0.35);
+  background: rgba(9, 16, 12, 0.9);
+  color: var(--text);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
 }
 
 .dropzone {

@@ -1,9 +1,11 @@
+import os
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth import auth_mode, require_auth
 from app.db import get_db
 from app.models import UploadRecord
 from app.scanner import scan_bytes
@@ -35,8 +37,17 @@ def index():
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/auth/config")
+def auth_config():
+    mode = auth_mode()
+    return {
+        "mode": mode,
+        "firebase_web_api_key": os.getenv("FIREBASE_WEB_API_KEY", "").strip() if mode == "firebase" else "",
+    }
+
+
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(file: UploadFile = File(...), _auth=Depends(require_auth)):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported file type")
 
@@ -78,7 +89,7 @@ async def upload(file: UploadFile = File(...)):
 
 
 @app.get("/uploads")
-async def list_uploads(limit: int = 50):
+async def list_uploads(limit: int = 50, _auth=Depends(require_auth)):
     try:
         db = get_db()
         cursor = db.uploads.find({}, {"_id": 0}).sort("_id", -1).limit(limit)
