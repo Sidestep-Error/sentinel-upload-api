@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
+      UPLOAD_RATE_LIMIT_PER_MINUTE: ${{ vars.UPLOAD_RATE_LIMIT_PER_MINUTE_CI || '120' }}
+      UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${{ vars.UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI || '60' }}
 
     steps:
       - name: Checkout
@@ -28,6 +30,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r app/requirements.txt
           pip install ruff
+
+      - name: Dependency scan (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r app/requirements.txt
 
       - name: Lint code (ruff)
         run: |
@@ -71,6 +78,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     env:
       PYTHONPATH: ${{ github.workspace }}
+      UPLOAD_RATE_LIMIT_PER_MINUTE: ${{ vars.UPLOAD_RATE_LIMIT_PER_MINUTE_CI || '120' }}
+      UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${{ vars.UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI || '60' }}
 
     steps:
       - name: Checkout
