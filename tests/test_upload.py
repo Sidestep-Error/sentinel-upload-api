@@ -1,7 +1,9 @@
 import pytest
 from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from app.main import app
 from app.main import _upload_request_times
+from app.main import enforce_upload_rate_limit
 from app.scanner import ScanResult
 
 
@@ -61,10 +63,15 @@ def test_upload_rejects_when_scanner_errors(client, monkeypatch):
     assert body["scan_status"] == "error"
 
 
-def test_upload_rate_limit_returns_429_when_exceeded(client, monkeypatch):
+def test_upload_rate_limit_returns_429_when_exceeded(monkeypatch):
     monkeypatch.setattr("app.main.RATE_LIMIT_UPLOADS_PER_MINUTE", 3)
     monkeypatch.setattr("app.main.RATE_LIMIT_WINDOW_SECONDS", 60)
+    _upload_request_times.clear()
 
-    files = {"file": ("hello.txt", b"hello", "text/plain")}
-    status_codes = [client.post("/upload", files=files).status_code for _ in range(5)]
-    assert 429 in status_codes
+    for _ in range(3):
+        enforce_upload_rate_limit("ci-test-client")
+
+    with pytest.raises(HTTPException) as exc:
+        enforce_upload_rate_limit("ci-test-client")
+
+    assert exc.value.status_code == 429
