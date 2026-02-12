@@ -27,6 +27,7 @@ Git flow policy
 CI pipeline
 
 - Triggers on pull requests and pushes to `main` and `develop`.
+- Runs dependency vulnerability scanning with `pip-audit` on `app/requirements.txt`.
 - Runs linting with `ruff` (`ruff check app tests`).
 - Runs tests with `pytest`.
 - Runs matrix tests on Python `3.11` and `3.12`.
@@ -113,11 +114,21 @@ Upload scanning behavior
 
 - Files are scanned in-memory (no file content is persisted).
 - MongoDB stores upload metadata and scan outcome (`scan_status`, `scan_engine`, `scan_detail`).
+- Upload endpoint rate limiting is enabled (`10/minute` per client IP) to reduce burst uploads/abuse.
+- Configure rate limit with `UPLOAD_RATE_LIMIT_PER_MINUTE` (default `10`) and `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` (default `60`).
+- In GitHub Actions CI, configure repo variables `UPLOAD_RATE_LIMIT_PER_MINUTE_CI` and `UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI` (workflow falls back to `120` and `60`).
 - `SCANNER_MODE=auto` (default): try ClamAV first, fallback to mock scanner if ClamAV is unavailable.
 - `SCANNER_MODE=clamav`: require ClamAV.
 - `SCANNER_MODE=mock`: mock scanner only.
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
+
+CI troubleshooting (rate limit)
+
+- If CI gets unexpected `429` responses, increase `UPLOAD_RATE_LIMIT_PER_MINUTE_CI` (start with `120`, then `300` for bursty test runs).
+- Keep `UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI=60` unless you need a shorter/longer evaluation window.
+- If CI should mimic production behavior, set CI variables to the same values as production env vars.
+- The rate-limit test overrides limiter constants in-test, so CI variable tuning should not break that test.
 
 Publish on a subdomain (production outline)
 
