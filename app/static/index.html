@@ -59,7 +59,7 @@
           <input id="file-input" type="file" />
         </div>
         <div class="meta">
-          <div>Allowed types: PDF, PNG, JPG, TXT, MD</div>
+          <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
           <div>Endpoint: <code>/upload</code></div>
         </div>
         <button class="button" id="upload-btn" type="button">Upload now</button>
@@ -171,11 +171,15 @@
           data.items.forEach((item) => {
             const row = document.createElement("div");
             row.className = "list-item";
-            row.innerHTML = `
-              <span>${item.filename}</span>
-              <span>${item.content_type}</span>
-              <span>${item.status}</span>
-            `;
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = item.filename;
+            const typeSpan = document.createElement("span");
+            typeSpan.textContent = item.content_type;
+            const statusSpan = document.createElement("span");
+            statusSpan.textContent = item.status;
+            row.appendChild(nameSpan);
+            row.appendChild(typeSpan);
+            row.appendChild(statusSpan);
             list.appendChild(row);
           });
         } catch (error) {

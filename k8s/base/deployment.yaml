@@ -37,6 +37,18 @@ spec:
               value: "10"
             - name: UPLOAD_RATE_LIMIT_WINDOW_SECONDS
               value: "60"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 5
           resources:
             requests:
               cpu: 100m
