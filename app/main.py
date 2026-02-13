@@ -1,7 +1,5 @@
 from pathlib import Path, PurePosixPath
 from collections import deque
-import os
-from pathlib import Path
 from threading import Lock
 from time import monotonic
 import logging
@@ -12,7 +10,7 @@ from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import auth_mode, require_auth
+from app.auth import require_auth
 from app.db import get_db
 from app.models import UploadRecord
 from app.scanner import scan_bytes
