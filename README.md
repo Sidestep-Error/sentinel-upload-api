@@ -123,6 +123,17 @@ Upload scanning behavior
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
 
+Authentication (Firebase)
+
+- Set `AUTH_MODE=firebase` to require Firebase ID token on `/upload` and `/uploads`.
+- Set `FIREBASE_WEB_API_KEY=<your_web_api_key>` in environment (served by backend config endpoint).
+- Send token as `Authorization: Bearer <firebase_id_token>`.
+- Configure credentials using one of:
+  - `FIREBASE_CREDENTIALS_FILE=/path/to/service-account.json`
+  - `FIREBASE_CREDENTIALS_JSON='{"type":"service_account", ...}'`
+- Default mode is `AUTH_MODE=off` (no auth required).
+- The web UI includes an Auth Console for create account/login without manually entering API keys.
+
 CI troubleshooting (rate limit)
 
 - If CI gets unexpected `429` responses, increase `UPLOAD_RATE_LIMIT_PER_MINUTE_CI` (start with `120`, then `300` for bursty test runs).
