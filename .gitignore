@@ -1,6 +1,7 @@
 .git
 .env
 .env.local
+.claude/
 
 __pycache__/
 *.pyc
@@ -19,3 +20,8 @@ build/
 
 *.log
 .DS_Store
+
+# Local secrets and credential dumps
+Credentials/
+*.firebase-adminsdk-*.json
+*service-account*.json

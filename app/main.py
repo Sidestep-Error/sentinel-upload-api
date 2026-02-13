@@ -1,15 +1,18 @@
 from pathlib import Path, PurePosixPath
 from collections import deque
+import os
+from pathlib import Path
 from threading import Lock
 from time import monotonic
 import logging
 import os
 import re
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.auth import auth_mode, require_auth
 from app.db import get_db
 from app.models import UploadRecord
 from app.scanner import scan_bytes
@@ -166,7 +169,7 @@ def validate_content_type(filename: str, claimed_type: str | None) -> str:
 
 
 @app.post("/upload")
-async def upload(request: Request, file: UploadFile = File(...)):
+async def upload(request: Request, file: UploadFile = File(...), _auth=Depends(require_auth)):
     client_ip = request.client.host if request.client else "unknown"
     enforce_upload_rate_limit(client_ip)
 
@@ -225,7 +228,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
 
 
 @app.get("/uploads")
-async def list_uploads(limit: int = 50):
+async def list_uploads(limit: int = 50, _auth=Depends(require_auth)):
     try:
         db = get_db()
         cursor = db.uploads.find({}, {"_id": 0}).sort("_id", -1).limit(limit)
