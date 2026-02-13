@@ -43,6 +43,8 @@ services:
       - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
       - CLAMAV_PORT=${CLAMAV_PORT:-3310}
       - CLAMAV_TIMEOUT_SECONDS=${CLAMAV_TIMEOUT_SECONDS:-5}
+      - UPLOAD_RATE_LIMIT_PER_MINUTE=${UPLOAD_RATE_LIMIT_PER_MINUTE:-10}
+      - UPLOAD_RATE_LIMIT_WINDOW_SECONDS=${UPLOAD_RATE_LIMIT_WINDOW_SECONDS:-60}
     depends_on:
       clamav:
         condition: service_started

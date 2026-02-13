@@ -1,7 +1,10 @@
+from collections import deque
 import os
 from pathlib import Path
+from threading import Lock
+from time import monotonic
 
-from fastapi import Depends, FastAPI, UploadFile, File, HTTPException
+from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -27,6 +30,40 @@ ALLOWED_CONTENT_TYPES = {
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
 
 
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        parsed = int(value)
+        return parsed if parsed > 0 else default
+    except ValueError:
+        return default
+
+
+RATE_LIMIT_UPLOADS_PER_MINUTE = _env_int("UPLOAD_RATE_LIMIT_PER_MINUTE", 10)
+RATE_LIMIT_WINDOW_SECONDS = _env_int("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", 60)
+
+_rate_limit_lock = Lock()
+_upload_request_times: dict[str, deque[float]] = {}
+
+
+def enforce_upload_rate_limit(client_id: str):
+    now = monotonic()
+    with _rate_limit_lock:
+        timestamps = _upload_request_times.setdefault(client_id, deque())
+        while timestamps and now - timestamps[0] >= RATE_LIMIT_WINDOW_SECONDS:
+            timestamps.popleft()
+
+        if len(timestamps) >= RATE_LIMIT_UPLOADS_PER_MINUTE:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limit exceeded: max {RATE_LIMIT_UPLOADS_PER_MINUTE} uploads per minute",
+            )
+
+        timestamps.append(now)
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -47,7 +84,9 @@ def auth_config():
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), _auth=Depends(require_auth)):
+async def upload(request: Request, file: UploadFile = File(...), _auth=Depends(require_auth)):
+    client_ip = request.client.host if request.client else "unknown"
+    enforce_upload_rate_limit(client_ip)
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail="Unsupported file type")
 
