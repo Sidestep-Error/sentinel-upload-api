@@ -1,6 +1,7 @@
 .git
 .env
 .env.local
+.claude/
 
 __pycache__/
 *.pyc
