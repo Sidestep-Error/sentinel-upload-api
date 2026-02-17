@@ -9,7 +9,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: api.example.com
+    - host: sentinel-upload.secion.se
       http:
         paths:
           - path: /
