@@ -28,13 +28,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-<<<<<<< HEAD
           pip install -r app/requirements-dev.txt
-          pip install ruff
 
       - name: Dependency scan (pip-audit)
         run: |
-          pip install pip-audit
           pip-audit -r app/requirements.txt
 
       - name: Lint code (ruff)
@@ -50,14 +47,6 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/work ghcr.io/yannh/kubeconform:latest \
             -summary -ignore-missing-schemas /work/k8s/gatekeeper/constrainttemplates /work/k8s/gatekeeper/constraints
-=======
-          pip install -r app/requirements.txt
-          pip install ruff
-
-      - name: Lint code (ruff)
-        run: |
-          ruff check app tests
->>>>>>> origin/main
 
       - name: Run tests
         run: |
@@ -97,11 +86,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     env:
       PYTHONPATH: ${{ github.workspace }}
-<<<<<<< HEAD
       UPLOAD_RATE_LIMIT_PER_MINUTE: ${{ vars.UPLOAD_RATE_LIMIT_PER_MINUTE_CI || '120' }}
       UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${{ vars.UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI || '60' }}
-=======
->>>>>>> origin/main
 
     steps:
       - name: Checkout
@@ -115,16 +101,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-<<<<<<< HEAD
           pip install -r app/requirements-dev.txt
-=======
-          pip install -r app/requirements.txt
->>>>>>> origin/main
 
       - name: Run tests
         run: |
           pytest -q
-<<<<<<< HEAD
 
   dockerhub-push:
     name: Docker Hub push
@@ -147,10 +128,20 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            echo "tags=${{ env.DOCKER_IMAGE }}:latest,${{ env.DOCKER_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            {
+              echo "value<<EOF"
+              echo "${{ env.DOCKER_IMAGE }}:latest"
+              echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "tags=${{ env.DOCKER_IMAGE }}:develop,${{ env.DOCKER_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            {
+              echo "value<<EOF"
+              echo "${{ env.DOCKER_IMAGE }}:develop"
+              echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push image
@@ -159,6 +150,4 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
-=======
->>>>>>> origin/main
+          tags: ${{ steps.tags.outputs.value }}
