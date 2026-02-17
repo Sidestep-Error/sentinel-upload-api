@@ -2,6 +2,7 @@
 
 ## 2026-02-11
 
+- Documented Render deployment URL and clarified scanner mode strategy (mock on Render free tier, clamav in local/K8s).
 - Added an upload mock scanner (`app/scanner.py`) to detect malicious signatures without storing file content.
 - Added ClamAV service integration in Docker Compose with scanner modes (`auto`, `clamav`, `mock`).
 - Extended upload metadata model with scan fields (`scan_status`, `scan_engine`, `scan_detail`).
@@ -30,3 +31,4 @@
 - Identified a UI bug where the file picker could open twice for some users.
 - Patched `app/static/index.html` to prevent double-trigger from dropzone/label clicks.
 - Added safer file input handling so the same file can be selected again after upload.
+

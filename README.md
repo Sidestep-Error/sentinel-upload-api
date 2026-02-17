@@ -66,6 +66,13 @@ UI
 - Logo asset: app/static/assets/sidestep-logo.png
 - Use the UI upload console to test /upload.
 - Uploaded Files list is populated when MongoDB is running.
+- Hosted demo (Render): https://sentinel-upload-api.onrender.com/
+
+Nginx reverse proxy
+
+- Nginx is now the public entrypoint in docker compose.
+- FastAPI is internal-only in the compose network.
+- Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
 
 Nginx reverse proxy
 
@@ -153,6 +160,8 @@ Upload scanning behavior
 - `SCANNER_MODE=auto` (default): try ClamAV first, fallback to mock scanner if ClamAV is unavailable.
 - `SCANNER_MODE=clamav`: require ClamAV.
 - `SCANNER_MODE=mock`: mock scanner only.
+- Render free tier runs with `SCANNER_MODE=mock` (no private ClamAV service).
+- Use local Docker Compose or Kubernetes when you need full ClamAV runtime scans.
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
 
