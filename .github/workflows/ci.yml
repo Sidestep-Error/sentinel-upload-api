@@ -28,12 +28,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r app/requirements.txt -r requirements-dev.txt
-          pip install ruff
+          pip install -r app/requirements.txt -r app/requirements-dev.txt
 
       - name: Dependency scan (pip-audit)
         run: |
-          pip install pip-audit
           pip-audit -r app/requirements.txt
 
       - name: Lint code (ruff)
@@ -103,7 +101,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r app/requirements.txt -r requirements-dev.txt
+          pip install -r app/requirements.txt -r app/requirements-dev.txt
 
       - name: Run tests
         run: |
@@ -130,10 +128,20 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
-          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-            echo "tags=${{ env.DOCKER_IMAGE }}:latest,${{ env.DOCKER_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            {
+              echo "value<<EOF"
+              echo "${{ env.DOCKER_IMAGE }}:latest"
+              echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "tags=${{ env.DOCKER_IMAGE }}:develop,${{ env.DOCKER_IMAGE }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+            {
+              echo "value<<EOF"
+              echo "${{ env.DOCKER_IMAGE }}:develop"
+              echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build and push image
@@ -142,4 +150,4 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: true
-          tags: ${{ steps.tags.outputs.tags }}
+          tags: ${{ steps.tags.outputs.value }}
