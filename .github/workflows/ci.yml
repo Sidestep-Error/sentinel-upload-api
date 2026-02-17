@@ -28,7 +28,6 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-<<<<<<< HEAD
           pip install -r app/requirements-dev.txt
           pip install ruff
 
@@ -50,14 +49,6 @@ jobs:
         run: |
           docker run --rm -v ${{ github.workspace }}:/work ghcr.io/yannh/kubeconform:latest \
             -summary -ignore-missing-schemas /work/k8s/gatekeeper/constrainttemplates /work/k8s/gatekeeper/constraints
-=======
-          pip install -r app/requirements.txt
-          pip install ruff
-
-      - name: Lint code (ruff)
-        run: |
-          ruff check app tests
->>>>>>> origin/main
 
       - name: Run tests
         run: |
@@ -97,11 +88,8 @@ jobs:
         python-version: ["3.11", "3.12"]
     env:
       PYTHONPATH: ${{ github.workspace }}
-<<<<<<< HEAD
       UPLOAD_RATE_LIMIT_PER_MINUTE: ${{ vars.UPLOAD_RATE_LIMIT_PER_MINUTE_CI || '120' }}
       UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${{ vars.UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI || '60' }}
-=======
->>>>>>> origin/main
 
     steps:
       - name: Checkout
@@ -115,16 +103,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-<<<<<<< HEAD
-          pip install -r app/requirements-dev.txt
-=======
           pip install -r app/requirements.txt
->>>>>>> origin/main
 
       - name: Run tests
         run: |
           pytest -q
-<<<<<<< HEAD
 
   dockerhub-push:
     name: Docker Hub push
@@ -160,5 +143,3 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.tags }}
-=======
->>>>>>> origin/main
