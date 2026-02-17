@@ -2,6 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: sentinel-upload-api
+  namespace: sentinel
   labels:
     app.kubernetes.io/name: sentinel-upload-api
     app.kubernetes.io/part-of: sentinel-platform

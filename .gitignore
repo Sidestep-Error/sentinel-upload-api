@@ -14,6 +14,7 @@ env/
 
 .pytest_cache/
 .mypy_cache/
+ToDo-intern.md
 
 dist/
 build/
@@ -25,3 +26,4 @@ build/
 Credentials/
 *.firebase-adminsdk-*.json
 *service-account*.json
+k8s/base/secret.yaml
