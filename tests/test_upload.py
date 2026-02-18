@@ -11,6 +11,9 @@ def test_upload_accepts_allowed_type(client):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "accepted"
+    assert body["decision"] == "accepted"
+    assert body["risk_score"] < 30
+    assert body["deduplicated"] is False
     assert body["content_type"] == "text/plain"
     assert body["scan_status"] == "clean"
 
@@ -38,6 +41,8 @@ def test_upload_rejects_malicious_signature(client):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "rejected"
+    assert body["decision"] == "rejected"
+    assert body["risk_score"] >= 70
     assert body["scan_status"] == "malicious"
 
 
@@ -51,6 +56,7 @@ def test_upload_rejects_when_scanner_errors(client, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "rejected"
+    assert body["decision"] in {"review", "rejected"}
     assert body["scan_status"] == "error"
 
 
@@ -80,6 +86,43 @@ def test_upload_sanitizes_path_and_accepts_valid_file(client):
     r = client.post("/upload", files=files)
     assert r.status_code == 200
     assert r.json()["filename"] == "hello.txt"
+    assert r.json()["sha256"]
+
+
+def test_upload_deduplicates_by_sha256(client, monkeypatch):
+    class FakeUploads:
+        def __init__(self):
+            self.items = []
+
+        async def find_one(self, query, projection):
+            target_hash = query.get("sha256")
+            for item in self.items:
+                if item.get("sha256") == target_hash:
+                    return {
+                        key: value for key, value in item.items()
+                        if key in projection and key != "_id"
+                    }
+            return None
+
+        async def insert_one(self, doc):
+            self.items.append(doc)
+            return object()
+
+    class FakeDB:
+        def __init__(self):
+            self.uploads = FakeUploads()
+
+    fake_db = FakeDB()
+    monkeypatch.setattr("app.main.get_db", lambda: fake_db)
+
+    files = {"file": ("hello.txt", b"hello", "text/plain")}
+    first = client.post("/upload", files=files)
+    assert first.status_code == 200
+    second = client.post("/upload", files=files)
+    assert second.status_code == 200
+    second_body = second.json()
+    assert second_body["deduplicated"] is True
+    assert second_body["sha256"] == first.json()["sha256"]
 
 
 def test_upload_rejects_oversized_file(client, monkeypatch):

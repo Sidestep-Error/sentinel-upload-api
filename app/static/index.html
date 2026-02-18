@@ -37,17 +37,6 @@
             A hardened file intake pipeline built for DevSecOps. Validate types,
             enforce policy, and ship with confidence.
           </p>
-          <div class="cta">
-            <a class="button" href="#project-docs">Uploaded Files</a>
-            <a class="button" href="#upload">Test Upload</a>
-            <a
-              class="button"
-              href="https://github.com/Sidestep-Error/sentinel-upload-api/issues/new/choose"
-              target="_blank"
-              rel="noopener noreferrer"
-              >Report Bug</a
-            >
-          </div>
         </div>
         <div class="panel">
           <img
@@ -58,19 +47,36 @@
         </div>
       </section>
 
-      <section id="upload" class="panel upload">
-        <h2>Upload Console</h2>
-        <div class="dropzone" id="dropzone">
-          <p>Drop a file here or click to choose</p>
-          <label for="file-input">Choose file</label>
-          <input id="file-input" type="file" />
+      <section id="upload" class="upload-layout">
+        <div class="panel upload">
+          <h2>Upload Console</h2>
+          <div class="dropzone" id="dropzone">
+            <p>Drop a file here or click to choose</p>
+            <label for="file-input">Choose file</label>
+            <input id="file-input" type="file" />
+          </div>
+          <div class="meta">
+            <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
+            <div>Endpoint: <code>/upload</code></div>
+          </div>
+          <button class="button" id="upload-btn" type="button">Upload now</button>
+          <div class="status" id="status">Waiting for input…</div>
         </div>
-        <div class="meta">
-          <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
-          <div>Endpoint: <code>/upload</code></div>
+        <div class="panel upload">
+          <h2>Virus Scanning</h2>
+          <div class="scan-grid">
+            <div class="scan-row"><span>File</span><strong id="scan-file">-</strong></div>
+            <div class="scan-row"><span>Result</span><strong id="scan-status">No scan yet</strong></div>
+            <div class="scan-row"><span>Decision</span><strong id="scan-decision">-</strong></div>
+            <div class="scan-row"><span>Risk score</span><strong id="scan-risk">-</strong></div>
+            <div class="scan-row"><span>Engine</span><strong id="scan-engine">-</strong></div>
+            <div class="scan-row"><span>Detail</span><strong id="scan-detail">-</strong></div>
+            <div class="scan-row"><span>Deduplicated</span><strong id="scan-dedup">-</strong></div>
+          </div>
+          <div class="meta">
+            <div>Result updates after each upload.</div>
+          </div>
         </div>
-        <button class="button" id="upload-btn" type="button">Upload now</button>
-        <div class="status" id="status">Waiting for input…</div>
       </section>
 
       <section id="project-docs" class="panel">
@@ -84,12 +90,14 @@
         <div class="list" id="uploads-list">
           <div class="list-item">Loading...</div>
         </div>
-        <p class="meta">
-          Developer API docs: <a href="/docs">/docs</a>
-        </p>
-        <p class="meta">
-          Project docs: README.md, PLAN.md, SECURITY.md, docs/*, sre/*, runbooks/*
-        </p>
+        <div id="dev-docs" class="dev-only">
+          <p class="meta">
+            Developer API docs: <a href="/docs">/docs</a>
+          </p>
+          <p class="meta">
+            Project docs: README.md, PLAN.md, SECURITY.md, docs/*, sre/*, runbooks/*
+          </p>
+        </div>
       </section>
 
       <section class="cards">
@@ -117,14 +125,56 @@
       const input = document.getElementById("file-input");
       const uploadBtn = document.getElementById("upload-btn");
       const statusEl = document.getElementById("status");
+      const scanFileEl = document.getElementById("scan-file");
+      const scanStatusEl = document.getElementById("scan-status");
+      const scanDecisionEl = document.getElementById("scan-decision");
+      const scanRiskEl = document.getElementById("scan-risk");
+      const scanEngineEl = document.getElementById("scan-engine");
+      const scanDetailEl = document.getElementById("scan-detail");
+      const scanDedupEl = document.getElementById("scan-dedup");
+      const devDocsEl = document.getElementById("dev-docs");
+
+      const isDevHost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "[::1]";
+      if (isDevHost && devDocsEl) {
+        devDocsEl.classList.add("is-visible");
+      }
       function setStatus(message, type) {
         statusEl.textContent = message;
         statusEl.classList.remove("error", "warn");
         if (type) statusEl.classList.add(type);
       }
 
-      function requestHeaders() {
-        return {};
+      function setScanResult(data) {
+        scanFileEl.textContent = data.filename || "-";
+        scanStatusEl.textContent = data.scan_status || "unknown";
+        scanDecisionEl.textContent = data.decision || "-";
+        scanRiskEl.textContent =
+          typeof data.risk_score === "number" ? `${data.risk_score}/100` : "-";
+        scanEngineEl.textContent = data.scan_engine || "-";
+        scanDetailEl.textContent = data.scan_detail || "-";
+        scanDedupEl.textContent = data.deduplicated ? "Yes" : "No";
+
+        scanStatusEl.classList.remove("status-clean", "status-malicious", "status-error");
+        scanDecisionEl.classList.remove("status-clean", "status-malicious", "status-review");
+
+        if (data.scan_status === "clean") {
+          scanStatusEl.classList.add("status-clean");
+        } else if (data.scan_status === "malicious") {
+          scanStatusEl.classList.add("status-malicious");
+        } else {
+          scanStatusEl.classList.add("status-error");
+        }
+
+        if (data.decision === "accepted") {
+          scanDecisionEl.classList.add("status-clean");
+        } else if (data.decision === "rejected") {
+          scanDecisionEl.classList.add("status-malicious");
+        } else if (data.decision === "review") {
+          scanDecisionEl.classList.add("status-review");
+        }
       }
 
       dropzone.addEventListener("dragover", (event) => {
@@ -167,7 +217,7 @@
 
       async function loadUploads() {
         try {
-          const response = await fetch("/uploads", { headers: requestHeaders() });
+          const response = await fetch("/uploads");
           if (!response.ok) {
             throw new Error("Database unavailable");
           }
@@ -211,7 +261,6 @@
           setStatus("Uploading...");
           const response = await fetch("/upload", {
             method: "POST",
-            headers: requestHeaders(),
             body: formData,
           });
           const data = await response.json();
@@ -219,6 +268,7 @@
             throw new Error(data.detail || "Upload failed");
           }
           setStatus(`Accepted: ${data.filename} (${data.content_type})`);
+          setScanResult(data);
           await loadUploads();
         } catch (error) {
           setStatus(error.message, "error");

@@ -2,6 +2,10 @@
 
 ## 2026-02-18
 
+- Added upload risk scoring (`risk_score`) and explicit decision field (`decision`: accepted/review/rejected).
+- Added risk reasons metadata (`risk_reasons`) in upload responses and MongoDB records.
+- Added SHA-256 hashing for uploads and deduplication flow (`deduplicated=true` on repeated content).
+- Updated UI Virus Scanning panel to show decision, risk score, and deduplication status.
 - Enabled HTTPS for `sentinel-upload.secion.se` using cert-manager and Let's Encrypt (`ClusterIssuer: letsencrypt-prod`).
 - Updated ingress TLS configuration to issue/store certificate in `sentinel-upload-tls`.
 - Verified successful certificate issuance (`Certificate READY=True`) and HTTPS health endpoint responses.
