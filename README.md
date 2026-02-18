@@ -165,16 +165,11 @@ Upload scanning behavior
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
 
-Authentication (Firebase)
+Authentication
 
-- Set `AUTH_MODE=firebase` to require Firebase ID token on `/upload` and `/uploads`.
-- Set `FIREBASE_WEB_API_KEY=<your_web_api_key>` in environment (served by backend config endpoint).
-- Send token as `Authorization: Bearer <firebase_id_token>`.
-- Configure credentials using one of:
-  - `FIREBASE_CREDENTIALS_FILE=/path/to/service-account.json`
-  - `FIREBASE_CREDENTIALS_JSON='{"type":"service_account", ...}'`
-- Default mode is `AUTH_MODE=off` (no auth required).
-- The web UI includes an Auth Console for create account/login without manually entering API keys.
+- Firebase authentication has been removed from the upload flow.
+- `/upload` and `/uploads` are now available without bearer tokens.
+- `AUTH_MODE` remains in configuration and should be set to `off`.
 
 CI troubleshooting (rate limit)
 
@@ -197,6 +192,27 @@ Publish on a subdomain (production outline)
 5. Security baseline:
    - Keep `.env` only on server (never commit secrets).
    - Restrict firewall to ports `80/443` only.
+
+Kubernetes ingress note (current production fix)
+
+- We run `ingress-nginx` as the active ingress controller in Kubernetes.
+- `k8s/base/ingress.yaml` uses `ingressClassName: nginx` and points to service port `8000`.
+- `k8s/base/service.yaml` exposes `port: 8000` -> `targetPort: 8000`.
+- `k8s/base/networkpolicy.yaml` allows ingress from namespace `ingress-nginx` to API port `8000`.
+- NGINX ingress is configured with `nginx.ingress.kubernetes.io/service-upstream: "true"` to route via Service ClusterIP (stable path in this cluster), which resolved recurring `502 Bad Gateway` from direct pod upstream routing.
+
+Kubernetes HTTPS (cert-manager + Let's Encrypt)
+
+- TLS is enabled in `k8s/base/ingress.yaml` with:
+  - `cert-manager.io/cluster-issuer: letsencrypt-prod`
+  - `tls.secretName: sentinel-upload-tls`
+- `ClusterIssuer` should use HTTP-01 with ingress class `nginx`.
+- In this environment, challenge routing needed NGINX service-upstream behavior to avoid `502` during ACME validation.
+- Verify certificate readiness:
+  - `kubectl -n sentinel get certificate`
+  - `kubectl -n sentinel get secret sentinel-upload-tls`
+- Validate over HTTPS:
+  - `curl -i https://sentinel-upload.secion.se/health` (GET should return `200`)
 
 Expected response
 

@@ -3,11 +3,18 @@ kind: Ingress
 metadata:
   name: sentinel-upload-api
   namespace: sentinel
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/service-upstream: "true"
   labels:
     app.kubernetes.io/name: sentinel-upload-api
     app.kubernetes.io/part-of: sentinel-platform
 spec:
   ingressClassName: nginx
+  tls:
+    - hosts:
+        - sentinel-upload.secion.se
+      secretName: sentinel-upload-tls
   rules:
     - host: sentinel-upload.secion.se
       http:
@@ -18,4 +25,4 @@ spec:
               service:
                 name: sentinel-upload-api
                 port:
-                  number: 80
+                  number: 8000

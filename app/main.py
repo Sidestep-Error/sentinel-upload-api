@@ -6,11 +6,10 @@ import logging
 import os
 import re
 
-from fastapi import Depends, FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.auth import require_auth
 from app.db import get_db
 from app.models import UploadRecord
 from app.scanner import scan_bytes
@@ -167,7 +166,7 @@ def validate_content_type(filename: str, claimed_type: str | None) -> str:
 
 
 @app.post("/upload")
-async def upload(request: Request, file: UploadFile = File(...), _auth=Depends(require_auth)):
+async def upload(request: Request, file: UploadFile = File(...)):
     client_ip = request.client.host if request.client else "unknown"
     enforce_upload_rate_limit(client_ip)
 
@@ -226,7 +225,7 @@ async def upload(request: Request, file: UploadFile = File(...), _auth=Depends(r
 
 
 @app.get("/uploads")
-async def list_uploads(limit: int = 50, _auth=Depends(require_auth)):
+async def list_uploads(limit: int = 50):
     try:
         db = get_db()
         cursor = db.uploads.find({}, {"_id": 0}).sort("_id", -1).limit(limit)
