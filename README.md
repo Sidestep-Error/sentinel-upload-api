@@ -74,12 +74,6 @@ Nginx reverse proxy
 - FastAPI is internal-only in the compose network.
 - Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
 
-Nginx reverse proxy
-
-- Nginx is now the public entrypoint in docker compose.
-- FastAPI is internal-only in the compose network.
-- Nginx host port is configurable (`NGINX_HOST_PORT`, default `8080`).
-
 MongoDB
 
 - Local mode: keep `MONGODB_URI` unset/commented so app uses local Mongo service.
@@ -153,7 +147,7 @@ Quality and infrastructure improvements
 Upload scanning behavior
 
 - Files are scanned in-memory (no file content is persisted).
-- MongoDB stores upload metadata and scan outcome (`scan_status`, `scan_engine`, `scan_detail`).
+- MongoDB stores upload metadata and scan outcome (`scan_status`, `scan_engine`, `scan_detail`), plus risk metadata (`risk_score`, `decision`, `risk_reasons`) and content hash (`sha256`).
 - Upload endpoint rate limiting is enabled (`10/minute` per client IP) to reduce burst uploads/abuse.
 - Configure rate limit with `UPLOAD_RATE_LIMIT_PER_MINUTE` (default `10`) and `UPLOAD_RATE_LIMIT_WINDOW_SECONDS` (default `60`).
 - In GitHub Actions CI, configure repo variables `UPLOAD_RATE_LIMIT_PER_MINUTE_CI` and `UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI` (workflow falls back to `120` and `60`).
@@ -164,6 +158,11 @@ Upload scanning behavior
 - Use local Docker Compose or Kubernetes when you need full ClamAV runtime scans.
 - Mock scanner flags EICAR marker and suspicious filename patterns.
 - Upload policy is fail-closed: non-clean scan results (`malicious` or `error`) are rejected.
+- Deduplication is enabled by content hash (`sha256`): repeated uploads of identical content reuse prior scan result and are marked `deduplicated=true`.
+- Risk scoring is returned on each upload:
+  - `0-29` => `decision=accepted`
+  - `30-69` => `decision=review`
+  - `70-100` => `decision=rejected`
 
 Authentication
 
@@ -226,7 +225,7 @@ uvicorn app.main:app --reload
 ```
 
 ```json
-{"filename":"README.md","content_type":"text/markdown","status":"accepted"}
+{"filename":"README.md","sha256":"...","content_type":"text/markdown","status":"accepted","decision":"accepted","risk_score":10,"risk_reasons":["No malicious signature detected"],"scan_status":"clean","scan_engine":"mock","scan_detail":"No signature matched","deduplicated":false}
 ```
 
 

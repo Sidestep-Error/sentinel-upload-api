@@ -2,6 +2,7 @@ from pathlib import Path, PurePosixPath
 from collections import deque
 from threading import Lock
 from time import monotonic
+from hashlib import sha256
 import logging
 import os
 import re
@@ -165,6 +166,52 @@ def validate_content_type(filename: str, claimed_type: str | None) -> str:
     return claimed_type
 
 
+def compute_risk(
+    filename: str,
+    content: bytes,
+    scan_status: str,
+    scan_engine: str,
+    scan_detail: str,
+) -> tuple[int, str, list[str]]:
+    score = 0
+    reasons: list[str] = []
+
+    lowered = filename.lower()
+    if scan_status == "malicious":
+        score = 100
+        reasons.append("Malicious signature or pattern detected")
+    elif scan_status == "error":
+        score = 80
+        reasons.append("Scanner error (fail-closed policy)")
+    else:
+        score = 10
+        reasons.append("No malicious signature detected")
+
+    if "fallback: ClamAV unavailable" in scan_detail:
+        score = max(score, 25)
+        reasons.append("Fallback scanner used because ClamAV was unavailable")
+
+    if any(token in lowered for token in ("eicar", "malicious", "payload", "shell")):
+        score = max(score, 70)
+        reasons.append("Suspicious filename pattern")
+
+    if len(content) >= 5 * 1024 * 1024:
+        score = min(100, score + 5)
+        reasons.append("Large file size raises inspection risk")
+
+    if scan_engine == "mock" and scan_status == "clean":
+        reasons.append("Mock engine result should be treated as lower confidence")
+
+    if score >= 70:
+        decision = "rejected"
+    elif score >= 30:
+        decision = "review"
+    else:
+        decision = "accepted"
+
+    return score, decision, reasons
+
+
 @app.post("/upload")
 async def upload(request: Request, file: UploadFile = File(...)):
     client_ip = request.client.host if request.client else "unknown"
@@ -183,30 +230,97 @@ async def upload(request: Request, file: UploadFile = File(...)):
     if len(content) > MAX_FILE_SIZE_BYTES:
         raise HTTPException(status_code=413, detail="File too large")
 
-    scan = scan_bytes(filename, content)
-    # Fail-closed: scanner errors are treated as rejected uploads.
-    status = "accepted" if scan.status == "clean" else "rejected"
+    file_sha256 = sha256(content).hexdigest()
 
-    if scan.status != "clean":
-        logger.warning(
-            "Upload rejected: file=%s scan_status=%s engine=%s detail=%s",
-            filename, scan.status, scan.engine, scan.detail,
+    db = None
+    try:
+        db = get_db()
+        existing = await db.uploads.find_one(
+            {"sha256": file_sha256},
+            {
+                "_id": 0,
+                "scan_status": 1,
+                "scan_engine": 1,
+                "scan_detail": 1,
+                "risk_score": 1,
+                "decision": 1,
+                "status": 1,
+                "risk_reasons": 1,
+            },
         )
-    else:
-        logger.info("Upload accepted: file=%s engine=%s", filename, scan.engine)
+        if existing:
+            dedup_record = UploadRecord(
+                filename=filename,
+                sha256=file_sha256,
+                content_type=content_type,
+                status=existing.get("status", "accepted"),
+                decision=existing.get("decision", "accepted"),
+                risk_score=int(existing.get("risk_score", 0)),
+                risk_reasons=existing.get("risk_reasons", ["Matched previous file hash"]),
+                scan_status=existing.get("scan_status", "clean"),
+                scan_engine=existing.get("scan_engine", "unknown"),
+                scan_detail=existing.get("scan_detail", "Matched previous file hash"),
+                deduplicated=True,
+            )
+            await db.uploads.insert_one(dedup_record.model_dump())
+            return {
+                "filename": filename,
+                "sha256": file_sha256,
+                "content_type": content_type,
+                "status": dedup_record.status,
+                "decision": dedup_record.decision,
+                "risk_score": dedup_record.risk_score,
+                "risk_reasons": dedup_record.risk_reasons,
+                "scan_status": dedup_record.scan_status,
+                "scan_engine": dedup_record.scan_engine,
+                "scan_detail": dedup_record.scan_detail,
+                "deduplicated": True,
+                "db_status": "stored",
+            }
+    except Exception:
+        logger.exception("Failed to check deduplication for %s", filename)
+        db = None
 
-    record = UploadRecord(
+    scan = scan_bytes(filename, content)
+    risk_score, decision, risk_reasons = compute_risk(
         filename=filename,
-        content_type=content_type,
-        status=status,
+        content=content,
         scan_status=scan.status,
         scan_engine=scan.engine,
         scan_detail=scan.detail,
     )
+    # Keep fail-closed status behavior for compatibility with existing clients.
+    status = "accepted" if scan.status == "clean" else "rejected"
+
+    if scan.status != "clean":
+        logger.warning(
+            "Upload rejected: file=%s scan_status=%s engine=%s score=%s decision=%s detail=%s",
+            filename, scan.status, scan.engine, risk_score, decision, scan.detail,
+        )
+    else:
+        logger.info(
+            "Upload accepted: file=%s engine=%s score=%s decision=%s",
+            filename, scan.engine, risk_score, decision,
+        )
+
+    record = UploadRecord(
+        filename=filename,
+        sha256=file_sha256,
+        content_type=content_type,
+        status=status,
+        decision=decision,
+        risk_score=risk_score,
+        risk_reasons=risk_reasons,
+        scan_status=scan.status,
+        scan_engine=scan.engine,
+        scan_detail=scan.detail,
+        deduplicated=False,
+    )
 
     db_status = "skipped"
     try:
-        db = get_db()
+        if db is None:
+            db = get_db()
         await db.uploads.insert_one(record.model_dump())
         db_status = "stored"
     except Exception:
@@ -215,11 +329,16 @@ async def upload(request: Request, file: UploadFile = File(...)):
 
     return {
         "filename": filename,
+        "sha256": file_sha256,
         "content_type": content_type,
         "status": status,
+        "decision": decision,
+        "risk_score": risk_score,
+        "risk_reasons": risk_reasons,
         "scan_status": scan.status,
         "scan_engine": scan.engine,
         "scan_detail": scan.detail,
+        "deduplicated": False,
         "db_status": db_status,
     }
 
