@@ -1,4 +1,5 @@
 import pytest
+from datetime import UTC, datetime, timedelta
 from fastapi import HTTPException
 from app.main import _upload_request_times
 from app.main import enforce_upload_rate_limit
@@ -137,6 +138,91 @@ def test_uploads_list_returns_503_when_db_unavailable(client):
     r = client.get("/uploads")
     assert r.status_code == 503
     assert "Database unavailable" in r.json()["detail"]
+
+
+def test_metrics_summary_returns_503_when_db_unavailable(client):
+    r = client.get("/metrics/summary")
+    assert r.status_code == 503
+    assert "Database unavailable" in r.json()["detail"]
+
+
+def test_metrics_summary_returns_expected_counts(client, monkeypatch):
+    now = datetime.now(UTC)
+    records = [
+        {
+            "created_at": now - timedelta(hours=1),
+            "status": "accepted",
+            "decision": "accepted",
+            "deduplicated": False,
+            "risk_score": 10,
+            "content_type": "text/plain",
+        },
+        {
+            "created_at": now - timedelta(hours=2),
+            "status": "rejected",
+            "decision": "rejected",
+            "deduplicated": True,
+            "risk_score": 95,
+            "content_type": "text/plain",
+        },
+        {
+            "created_at": now - timedelta(days=3),
+            "status": "accepted",
+            "decision": "review",
+            "deduplicated": False,
+            "risk_score": 45,
+            "content_type": "image/jpeg",
+        },
+        {
+            "created_at": now - timedelta(days=10),
+            "status": "accepted",
+            "decision": "accepted",
+            "deduplicated": False,
+            "risk_score": 15,
+            "content_type": "text/markdown",
+        },
+    ]
+
+    class FakeCursor:
+        def __init__(self, items):
+            self.items = items
+
+        def sort(self, *_args, **_kwargs):
+            return self
+
+        def limit(self, *_args, **_kwargs):
+            return self
+
+        def __aiter__(self):
+            self._iter = iter(self.items)
+            return self
+
+        async def __anext__(self):
+            try:
+                return next(self._iter)
+            except StopIteration:
+                raise StopAsyncIteration
+
+    class FakeUploads:
+        def find(self, *_args, **_kwargs):
+            return FakeCursor(records)
+
+    class FakeDB:
+        def __init__(self):
+            self.uploads = FakeUploads()
+
+    monkeypatch.setattr("app.main.get_db", lambda: FakeDB())
+
+    r = client.get("/metrics/summary")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["last_24h"]["total_uploads"] == 2
+    assert body["last_24h"]["rejected"] == 1
+    assert body["last_7d"]["total_uploads"] == 3
+    assert body["last_7d"]["review"] == 1
+    assert body["all_time"]["total_uploads"] == 4
+    assert body["top_content_types_7d"][0]["content_type"] == "text/plain"
+    assert body["top_content_types_7d"][0]["count"] == 2
 
 
 def test_upload_rate_limit_returns_429_when_exceeded(monkeypatch):

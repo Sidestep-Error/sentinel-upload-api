@@ -1,7 +1,9 @@
+from datetime import UTC, datetime
 from pydantic import BaseModel, Field
 
 
 class UploadRecord(BaseModel):
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     filename: str
     sha256: str
     content_type: str

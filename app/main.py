@@ -3,6 +3,7 @@ from collections import deque
 from threading import Lock
 from time import monotonic
 from hashlib import sha256
+from datetime import UTC, datetime, timedelta
 import logging
 import os
 import re
@@ -11,7 +12,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.db import get_db
+from app.db import get_db, ensure_upload_indexes
 from app.models import UploadRecord
 from app.scanner import scan_bytes
 
@@ -89,6 +90,9 @@ RATE_LIMIT_WINDOW_SECONDS = _env_int("UPLOAD_RATE_LIMIT_WINDOW_SECONDS", 60)
 _rate_limit_lock = Lock()
 _upload_request_times: dict[str, deque[float]] = {}
 
+DEFAULT_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_DEFAULT", 25)
+MAX_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_MAX", 100)
+
 
 def enforce_upload_rate_limit(client_id: str):
     now = monotonic()
@@ -118,6 +122,15 @@ def enforce_upload_rate_limit(client_id: str):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.on_event("startup")
+async def startup():
+    try:
+        await ensure_upload_indexes()
+    except Exception:
+        # App should stay available even if DB indexes can't be ensured at startup.
+        logger.exception("Failed to ensure MongoDB indexes on startup")
 
 
 @app.get("/")
@@ -210,6 +223,73 @@ def compute_risk(
         decision = "accepted"
 
     return score, decision, reasons
+
+
+def _record_timestamp(record: dict) -> datetime | None:
+    created_at = record.get("created_at")
+    if isinstance(created_at, datetime):
+        return created_at if created_at.tzinfo else created_at.replace(tzinfo=UTC)
+
+    object_id = record.get("_id")
+    generation_time = getattr(object_id, "generation_time", None)
+    if isinstance(generation_time, datetime):
+        return generation_time if generation_time.tzinfo else generation_time.replace(tzinfo=UTC)
+
+    return None
+
+
+def _build_summary(items: list[dict]) -> dict:
+    now = datetime.now(UTC)
+    window_24h = now - timedelta(hours=24)
+    window_7d = now - timedelta(days=7)
+
+    def summarize(records: list[dict]) -> dict:
+        total = len(records)
+        accepted = sum(1 for item in records if item.get("status") == "accepted")
+        rejected = sum(1 for item in records if item.get("status") == "rejected")
+        review = sum(1 for item in records if item.get("decision") == "review")
+        deduplicated = sum(1 for item in records if item.get("deduplicated") is True)
+        avg_risk = (
+            round(sum(int(item.get("risk_score", 0)) for item in records) / total, 1)
+            if total else 0.0
+        )
+        rejection_rate = round((rejected / total) * 100, 1) if total else 0.0
+        return {
+            "total_uploads": total,
+            "accepted": accepted,
+            "rejected": rejected,
+            "review": review,
+            "deduplicated": deduplicated,
+            "avg_risk_score": avg_risk,
+            "rejection_rate_percent": rejection_rate,
+        }
+
+    oldest = datetime.min.replace(tzinfo=UTC)
+    items_24h = [
+        item for item in items
+        if (_record_timestamp(item) or oldest) >= window_24h
+    ]
+    items_7d = [
+        item for item in items
+        if (_record_timestamp(item) or oldest) >= window_7d
+    ]
+
+    top_types: dict[str, int] = {}
+    for item in items_7d:
+        ctype = item.get("content_type") or "unknown"
+        top_types[ctype] = top_types.get(ctype, 0) + 1
+    top_content_types = sorted(
+        [{"content_type": k, "count": v} for k, v in top_types.items()],
+        key=lambda row: row["count"],
+        reverse=True,
+    )[:3]
+
+    return {
+        "last_24h": summarize(items_24h),
+        "last_7d": summarize(items_7d),
+        "all_time": summarize(items),
+        "top_content_types_7d": top_content_types,
+    }
 
 
 @app.post("/upload")
@@ -344,12 +424,36 @@ async def upload(request: Request, file: UploadFile = File(...)):
 
 
 @app.get("/uploads")
-async def list_uploads(limit: int = 50):
+async def list_uploads(limit: int = DEFAULT_UPLOAD_LIST_LIMIT):
     try:
+        safe_limit = max(1, min(limit, MAX_UPLOAD_LIST_LIMIT))
         db = get_db()
-        cursor = db.uploads.find({}, {"_id": 0}).sort("_id", -1).limit(limit)
+        cursor = db.uploads.find({}, {"_id": 0}).sort("_id", -1).limit(safe_limit)
         items = [item async for item in cursor]
         return {"items": items}
     except Exception:
         logger.exception("Failed to list uploads from database")
+        raise HTTPException(status_code=503, detail="Database unavailable")
+
+
+@app.get("/metrics/summary")
+async def metrics_summary(limit: int = 1000):
+    try:
+        db = get_db()
+        cursor = db.uploads.find(
+            {},
+            {
+                "_id": 1,
+                "created_at": 1,
+                "status": 1,
+                "decision": 1,
+                "deduplicated": 1,
+                "risk_score": 1,
+                "content_type": 1,
+            },
+        ).sort("_id", -1).limit(limit)
+        items = [item async for item in cursor]
+        return _build_summary(items)
+    except Exception:
+        logger.exception("Failed to build metrics summary")
         raise HTTPException(status_code=503, detail="Database unavailable")

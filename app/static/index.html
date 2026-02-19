@@ -102,16 +102,20 @@
 
       <section class="cards">
         <div class="card">
-          <h3>Policy Guarded</h3>
-          <p>Trivy, SBOM, and gatekeeper checks enforce clean builds.</p>
+          <h3>Uploads (24h)</h3>
+          <p id="metric-uploads-24h">-</p>
         </div>
         <div class="card">
-          <h3>Runtime Ready</h3>
-          <p>Falco + runbooks for instant incident response.</p>
+          <h3>Rejected (24h)</h3>
+          <p id="metric-rejected-24h">-</p>
         </div>
         <div class="card">
-          <h3>Observable</h3>
-          <p>SLIs/SLOs track success rate and latency.</p>
+          <h3>Rejection Rate (7d)</h3>
+          <p id="metric-reject-rate-7d">-</p>
+        </div>
+        <div class="card">
+          <h3>Average Risk (7d)</h3>
+          <p id="metric-risk-7d">-</p>
         </div>
       </section>
 
@@ -133,6 +137,10 @@
       const scanDetailEl = document.getElementById("scan-detail");
       const scanDedupEl = document.getElementById("scan-dedup");
       const devDocsEl = document.getElementById("dev-docs");
+      const metricUploads24hEl = document.getElementById("metric-uploads-24h");
+      const metricRejected24hEl = document.getElementById("metric-rejected-24h");
+      const metricRejectRate7dEl = document.getElementById("metric-reject-rate-7d");
+      const metricRisk7dEl = document.getElementById("metric-risk-7d");
 
       const isDevHost =
         window.location.hostname === "localhost" ||
@@ -177,6 +185,29 @@
         }
       }
 
+      function setMetrics(data) {
+        if (!data) return;
+        const last24h = data.last_24h || {};
+        const last7d = data.last_7d || {};
+        metricUploads24hEl.textContent = `${last24h.total_uploads ?? 0}`;
+        metricRejected24hEl.textContent = `${last24h.rejected ?? 0}`;
+        metricRejectRate7dEl.textContent = `${last7d.rejection_rate_percent ?? 0}%`;
+        metricRisk7dEl.textContent = `${last7d.avg_risk_score ?? 0}/100`;
+      }
+
+      function detailRow(label, value, valueClass) {
+        const row = document.createElement("div");
+        row.className = "scan-row";
+        const labelEl = document.createElement("span");
+        labelEl.textContent = label;
+        const valueEl = document.createElement("strong");
+        valueEl.textContent = value;
+        if (valueClass) valueEl.classList.add(valueClass);
+        row.appendChild(labelEl);
+        row.appendChild(valueEl);
+        return row;
+      }
+
       dropzone.addEventListener("dragover", (event) => {
         event.preventDefault();
         dropzone.classList.add("dragover");
@@ -217,7 +248,7 @@
 
       async function loadUploads() {
         try {
-          const response = await fetch("/uploads");
+          const response = await fetch("/uploads?limit=25");
           if (!response.ok) {
             throw new Error("Database unavailable");
           }
@@ -229,22 +260,83 @@
             return;
           }
           data.items.forEach((item) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "upload-item";
+
             const row = document.createElement("div");
-            row.className = "list-item";
+            row.className = "list-item list-item-toggle";
+            row.setAttribute("role", "button");
+            row.setAttribute("tabindex", "0");
+            row.setAttribute("aria-expanded", "false");
+            row.title = "Click to show scan details";
             const nameSpan = document.createElement("span");
             nameSpan.textContent = item.filename;
             const typeSpan = document.createElement("span");
             typeSpan.textContent = item.content_type;
             const statusSpan = document.createElement("span");
             statusSpan.textContent = item.status;
+            if (item.status === "rejected") {
+              statusSpan.classList.add("status-malicious");
+            } else if (item.status === "accepted") {
+              statusSpan.classList.add("status-clean");
+            } else {
+              statusSpan.classList.add("status-review");
+            }
             row.appendChild(nameSpan);
             row.appendChild(typeSpan);
             row.appendChild(statusSpan);
-            list.appendChild(row);
+
+            const details = document.createElement("div");
+            details.className = "upload-details";
+            details.hidden = true;
+            details.style.display = "none";
+            details.appendChild(detailRow("Result", item.scan_status || "unknown"));
+            details.appendChild(detailRow("Decision", item.decision || "-", item.decision === "rejected" ? "status-malicious" : item.decision === "accepted" ? "status-clean" : "status-review"));
+            details.appendChild(detailRow("Risk score", typeof item.risk_score === "number" ? `${item.risk_score}/100` : "-"));
+            details.appendChild(detailRow("Engine", item.scan_engine || "-"));
+            details.appendChild(detailRow("Detail", item.scan_detail || "-"));
+            details.appendChild(detailRow("Deduplicated", item.deduplicated ? "Yes" : "No"));
+            details.appendChild(detailRow("SHA-256", item.sha256 || "-"));
+
+            const toggleDetails = () => {
+              const isOpen = wrapper.classList.toggle("is-open");
+              details.hidden = !isOpen;
+              details.style.display = isOpen ? "grid" : "none";
+              row.setAttribute("aria-expanded", isOpen ? "true" : "false");
+              // Keep the side panel in sync with selected row.
+              setScanResult(item);
+            };
+            row.addEventListener("click", toggleDetails);
+            row.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleDetails();
+              }
+            });
+
+            wrapper.appendChild(row);
+            wrapper.appendChild(details);
+            list.appendChild(wrapper);
           });
         } catch (error) {
           const list = document.getElementById("uploads-list");
           list.innerHTML = `<div class="list-item">${error.message}</div>`;
+        }
+      }
+
+      async function loadMetrics() {
+        try {
+          const response = await fetch("/metrics/summary");
+          if (!response.ok) {
+            throw new Error("Metrics unavailable");
+          }
+          const data = await response.json();
+          setMetrics(data);
+        } catch (_error) {
+          metricUploads24hEl.textContent = "-";
+          metricRejected24hEl.textContent = "-";
+          metricRejectRate7dEl.textContent = "-";
+          metricRisk7dEl.textContent = "-";
         }
       }
 
@@ -270,12 +362,14 @@
           setStatus(`Accepted: ${data.filename} (${data.content_type})`);
           setScanResult(data);
           await loadUploads();
+          await loadMetrics();
         } catch (error) {
           setStatus(error.message, "error");
         }
       });
 
       loadUploads();
+      loadMetrics();
     </script>
     <a
   class="bug-fab"

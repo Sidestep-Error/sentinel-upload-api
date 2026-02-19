@@ -106,6 +106,14 @@ List uploads (requires MongoDB)
 curl http://localhost:8080/uploads
 ```
 
+You can override list size with query param, e.g. `GET /uploads?limit=25`.
+
+Metrics summary (requires MongoDB)
+
+```powershell
+curl http://localhost:8080/metrics/summary
+```
+
 Upload (PowerShell)
 
 ```powershell
@@ -163,6 +171,9 @@ Upload scanning behavior
   - `0-29` => `decision=accepted`
   - `30-69` => `decision=review`
   - `70-100` => `decision=rejected`
+- Trend metrics are available at `/metrics/summary` with windows for `last_24h`, `last_7d`, and `all_time`.
+- Upload retention is controlled by MongoDB TTL index on `created_at` (default `UPLOAD_RETENTION_DAYS=30`).
+- Upload list defaults to `UPLOAD_LIST_LIMIT_DEFAULT=25` and is capped by `UPLOAD_LIST_LIMIT_MAX=100`.
 
 Authentication
 
