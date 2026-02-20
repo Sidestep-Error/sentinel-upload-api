@@ -111,21 +111,101 @@ main > section:first-of-type {
 .hero {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 32px;
-  align-items: center;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.hero > .panel {
+  height: 100%;
 }
 
 .hero h1 {
-  font-size: clamp(2.4rem, 4vw, 4.2rem);
+  font-size: clamp(1.7rem, 2.7vw, 2.9rem);
   margin: 0 0 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  line-height: 1.06;
+  max-width: 16ch;
+  text-wrap: balance;
 }
 
 .hero p {
   color: var(--muted);
   font-size: 1.1rem;
   line-height: 1.6;
+}
+
+.hero-copy {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.hero-map-wrap {
+  display: grid;
+  gap: 10px;
+}
+
+.hero-map-head {
+  display: grid;
+  gap: 4px;
+}
+
+.hero-map-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.hero-map-head small {
+  color: var(--muted);
+}
+
+.threat-map {
+  height: 250px;
+  border: 1px solid rgba(54, 255, 122, 0.25);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0b140f;
+}
+
+.threat-dot {
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(146, 255, 178, 0.95) 0%, rgba(54, 255, 122, 0.7) 45%, rgba(54, 255, 122, 0.08) 80%);
+  border: 1px solid rgba(54, 255, 122, 0.7);
+  box-shadow: 0 0 0 0 rgba(54, 255, 122, 0.45);
+  animation: threatPulse 2.2s ease-out infinite;
+}
+
+@keyframes threatPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(54, 255, 122, 0.45);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(54, 255, 122, 0);
+    transform: scale(1.12);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(54, 255, 122, 0);
+    transform: scale(1);
+  }
+}
+
+.leaflet-container {
+  background: #0b140f;
+}
+
+.leaflet-tile-pane {
+  filter: hue-rotate(55deg) saturate(0.85) brightness(0.95) contrast(1.02);
+}
+
+.leaflet-control-attribution {
+  background: rgba(8, 14, 11, 0.78) !important;
+  color: #9fb4a8 !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--neon) !important;
 }
 
 .hero .cta {
@@ -173,6 +253,10 @@ button.button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 16px;
+}
+
+.map-panel h2 {
+  margin: 0 0 12px;
 }
 
 
@@ -445,6 +529,10 @@ footer {
   .nav {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .threat-map {
+    height: 220px;
   }
 }
 
