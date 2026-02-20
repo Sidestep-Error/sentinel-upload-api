@@ -4,9 +4,12 @@ from threading import Lock
 from time import monotonic
 from hashlib import sha256
 from datetime import UTC, datetime, timedelta
+import asyncio
+import json
 import logging
 import os
 import re
+from urllib import request
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -92,6 +95,23 @@ _upload_request_times: dict[str, deque[float]] = {}
 
 DEFAULT_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_DEFAULT", 25)
 MAX_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_MAX", 100)
+CISA_KEV_URL = os.getenv(
+    "CISA_KEV_URL",
+    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+)
+CISA_KEV_USER_AGENT = os.getenv(
+    "CISA_KEV_USER_AGENT",
+    "SentinelUploadAPI/1.0 (Sidestep Error; contact: sidestep@secion.se)",
+)
+CISA_KEV_TIMEOUT_SECONDS = float(os.getenv("CISA_KEV_TIMEOUT_SECONDS", "8"))
+CISA_KEV_MIN_SECONDS_BETWEEN_CALLS = max(10, _env_int("CISA_KEV_MIN_SECONDS_BETWEEN_CALLS", 300))
+CISA_KEV_CACHE_TTL_SECONDS = max(
+    CISA_KEV_MIN_SECONDS_BETWEEN_CALLS, _env_int("CISA_KEV_CACHE_TTL_SECONDS", 300)
+)
+_kev_lock = Lock()
+_kev_cached_payload: dict | None = None
+_kev_cached_at_monotonic = 0.0
+_kev_last_attempt_monotonic = 0.0
 
 
 def enforce_upload_rate_limit(client_id: str):
@@ -292,6 +312,61 @@ def _build_summary(items: list[dict]) -> dict:
     }
 
 
+def _parse_kev_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _fetch_kev_summary_remote() -> dict:
+    req = request.Request(
+        CISA_KEV_URL,
+        headers={
+            "User-Agent": CISA_KEV_USER_AGENT,
+            "Accept": "application/json",
+        },
+    )
+    with request.urlopen(req, timeout=CISA_KEV_TIMEOUT_SECONDS) as response:
+        payload = response.read().decode("utf-8")
+    data = json.loads(payload)
+    vulnerabilities = data.get("vulnerabilities", [])
+    if not isinstance(vulnerabilities, list):
+        raise ValueError("Unexpected CISA KEV response shape")
+
+    now = datetime.now(UTC)
+    cutoff_30d = now - timedelta(days=30)
+    normalized = []
+    for item in vulnerabilities:
+        normalized.append(
+            {
+                "cve": item.get("cveID", ""),
+                "vendor": item.get("vendorProject", ""),
+                "product": item.get("product", ""),
+                "date_added": item.get("dateAdded", ""),
+                "description": item.get("shortDescription", ""),
+                "ransomware_use": item.get("knownRansomwareCampaignUse", ""),
+            }
+        )
+
+    normalized.sort(key=lambda row: row["date_added"], reverse=True)
+    added_last_30d = sum(
+        1
+        for item in vulnerabilities
+        if (_parse_kev_date(item.get("dateAdded")) or datetime.min.replace(tzinfo=UTC)) >= cutoff_30d
+    )
+
+    return {
+        "source": "CISA KEV",
+        "fetched_at": now.isoformat(),
+        "total_known_exploited_cves": len(vulnerabilities),
+        "added_last_30_days": added_last_30d,
+        "latest": normalized[:8],
+    }
+
+
 @app.post("/upload")
 async def upload(request: Request, file: UploadFile = File(...)):
     client_ip = request.client.host if request.client else "unknown"
@@ -457,3 +532,32 @@ async def metrics_summary(limit: int = 1000):
     except Exception:
         logger.exception("Failed to build metrics summary")
         raise HTTPException(status_code=503, detail="Database unavailable")
+
+
+@app.get("/external/threats/kev-summary")
+async def kev_summary():
+    global _kev_last_attempt_monotonic, _kev_cached_payload, _kev_cached_at_monotonic
+    now = monotonic()
+    with _kev_lock:
+        cached = _kev_cached_payload
+        is_fresh = cached and (now - _kev_cached_at_monotonic) <= CISA_KEV_CACHE_TTL_SECONDS
+        should_wait = (now - _kev_last_attempt_monotonic) < CISA_KEV_MIN_SECONDS_BETWEEN_CALLS
+        if is_fresh or (should_wait and cached):
+            return cached
+        _kev_last_attempt_monotonic = now
+
+    try:
+        payload = await asyncio.to_thread(_fetch_kev_summary_remote)
+        with _kev_lock:
+            _kev_cached_payload = payload
+            _kev_cached_at_monotonic = monotonic()
+        return payload
+    except Exception:
+        logger.exception("Failed to fetch CISA KEV summary")
+        with _kev_lock:
+            cached = _kev_cached_payload
+        if cached:
+            fallback = dict(cached)
+            fallback["warning"] = "CISA KEV unavailable; serving cached data"
+            return fallback
+        raise HTTPException(status_code=503, detail="CISA KEV unavailable")

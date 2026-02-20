@@ -2,6 +2,8 @@
 
 ## 2026-02-18
 
+- Replaced hero image panel with cyber threat feed panel powered by backend endpoint `/external/threats/kev-summary` (CISA KEV).
+- Added backend CISA KEV proxy with cache/rate-limit guard and explicit `User-Agent` header.
 - Added upload list UX guardrails: default list limit (`25`) and scrollable Uploaded Files panel.
 - Added MongoDB indexes for uploads: `sha256` index and TTL retention index on `created_at` (`UPLOAD_RETENTION_DAYS`, default 30).
 - Added metrics summary endpoint `GET /metrics/summary` with 24h/7d/all-time trend aggregates.
