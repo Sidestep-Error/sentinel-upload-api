@@ -2,6 +2,10 @@
 
 ## 2026-02-18
 
+- Added upload list UX guardrails: default list limit (`25`) and scrollable Uploaded Files panel.
+- Added MongoDB indexes for uploads: `sha256` index and TTL retention index on `created_at` (`UPLOAD_RETENTION_DAYS`, default 30).
+- Added metrics summary endpoint `GET /metrics/summary` with 24h/7d/all-time trend aggregates.
+- Updated frontend cards to show live trend metrics (uploads, rejected, rejection rate, average risk).
 - Added upload risk scoring (`risk_score`) and explicit decision field (`decision`: accepted/review/rejected).
 - Added risk reasons metadata (`risk_reasons`) in upload responses and MongoDB records.
 - Added SHA-256 hashing for uploads and deduplication flow (`deduplicated=true` on repeated content).

@@ -236,18 +236,18 @@ button.button {
   word-break: break-word;
 }
 
-.scan-row strong.status-clean {
+.status-clean {
   color: var(--neon);
   text-shadow: 0 0 10px rgba(54, 255, 122, 0.35);
 }
 
-.scan-row strong.status-malicious {
+.status-malicious {
   color: var(--danger);
   text-shadow: 0 0 12px rgba(255, 92, 108, 0.45);
 }
 
-.scan-row strong.status-error,
-.scan-row strong.status-review {
+.status-error,
+.status-review {
   color: var(--warn);
   text-shadow: 0 0 10px rgba(255, 200, 87, 0.35);
 }
@@ -295,6 +295,23 @@ button.button {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.list::-webkit-scrollbar-thumb {
+  background: rgba(54, 255, 122, 0.3);
+  border-radius: 999px;
+}
+
+.list::-webkit-scrollbar-track {
+  background: rgba(9, 16, 12, 0.6);
+  border-radius: 999px;
 }
 
 .list-item {
@@ -309,8 +326,52 @@ button.button {
   font-size: 0.9rem;
 }
 
-.list-item span:last-child {
+.list-item-toggle {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.list-item-toggle * {
+  cursor: pointer;
+}
+
+.list-item-toggle::after {
+  content: "▾";
+  justify-self: end;
+  color: var(--muted);
+  transition: transform 0.2s ease;
+}
+
+.upload-item.is-open .list-item-toggle::after {
+  transform: rotate(180deg);
+}
+
+.upload-details {
+  display: none;
+  gap: 8px;
+  padding: 2px 4px 6px;
+}
+
+.upload-item.is-open .upload-details {
+  display: grid;
+}
+
+.list-item .status-malicious {
+  color: var(--danger);
+  text-shadow: 0 0 12px rgba(255, 92, 108, 0.45);
+}
+
+.list-item .status-clean {
   color: var(--neon);
+  text-shadow: 0 0 10px rgba(54, 255, 122, 0.35);
+}
+
+.list-item .status-review,
+.list-item .status-error {
+  color: var(--warn);
+  text-shadow: 0 0 10px rgba(255, 200, 87, 0.35);
 }
 
 a {
