@@ -4,9 +4,12 @@ from threading import Lock
 from time import monotonic
 from hashlib import sha256
 from datetime import UTC, datetime, timedelta
+import asyncio
+import json
 import logging
 import os
 import re
+from urllib import error, request
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -92,6 +95,39 @@ _upload_request_times: dict[str, deque[float]] = {}
 
 DEFAULT_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_DEFAULT", 25)
 MAX_UPLOAD_LIST_LIMIT = _env_int("UPLOAD_LIST_LIMIT_MAX", 100)
+POLISEN_API_URL = "https://polisen.se/api/events"
+POLISEN_USER_AGENT = os.getenv(
+    "POLISEN_USER_AGENT",
+    "SentinelUploadAPI/1.0 (Sidestep Error; contact: sidestep@secion.se)",
+)
+POLISEN_TIMEOUT_SECONDS = float(os.getenv("POLISEN_TIMEOUT_SECONDS", "8"))
+POLISEN_MIN_SECONDS_BETWEEN_CALLS = max(10, _env_int("POLISEN_MIN_SECONDS_BETWEEN_CALLS", 60))
+POLISEN_CACHE_TTL_SECONDS = max(
+    POLISEN_MIN_SECONDS_BETWEEN_CALLS, _env_int("POLISEN_CACHE_TTL_SECONDS", 60)
+)
+_polisen_lock = Lock()
+_polisen_cached_payload: dict | None = None
+_polisen_cached_at_monotonic = 0.0
+_polisen_last_attempt_monotonic = 0.0
+_polisen_permanent_404 = False
+
+CISA_KEV_URL = os.getenv(
+    "CISA_KEV_URL",
+    "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+)
+CISA_KEV_USER_AGENT = os.getenv(
+    "CISA_KEV_USER_AGENT",
+    "SentinelUploadAPI/1.0 (Sidestep Error; contact: sidestep@secion.se)",
+)
+CISA_KEV_TIMEOUT_SECONDS = float(os.getenv("CISA_KEV_TIMEOUT_SECONDS", "8"))
+CISA_KEV_MIN_SECONDS_BETWEEN_CALLS = max(10, _env_int("CISA_KEV_MIN_SECONDS_BETWEEN_CALLS", 300))
+CISA_KEV_CACHE_TTL_SECONDS = max(
+    CISA_KEV_MIN_SECONDS_BETWEEN_CALLS, _env_int("CISA_KEV_CACHE_TTL_SECONDS", 300)
+)
+_kev_lock = Lock()
+_kev_cached_payload: dict | None = None
+_kev_cached_at_monotonic = 0.0
+_kev_last_attempt_monotonic = 0.0
 
 
 def enforce_upload_rate_limit(client_id: str):
@@ -292,6 +328,136 @@ def _build_summary(items: list[dict]) -> dict:
     }
 
 
+def _parse_polisen_gps(value) -> tuple[float, float] | None:
+    if isinstance(value, str):
+        parts = [part.strip() for part in value.split(",")]
+        if len(parts) >= 2:
+            try:
+                return float(parts[0]), float(parts[1])
+            except ValueError:
+                return None
+    if isinstance(value, dict):
+        lat = value.get("latitude") or value.get("lat")
+        lon = value.get("longitude") or value.get("lon")
+        if lat is not None and lon is not None:
+            try:
+                return float(lat), float(lon)
+            except ValueError:
+                return None
+    return None
+
+
+def _normalize_sweden_coords(lat: float, lon: float) -> tuple[float, float]:
+    # Police events are Swedish data. If coordinates appear swapped, flip them.
+    if not (54.0 <= lat <= 70.0 and 10.0 <= lon <= 25.0):
+        if 54.0 <= lon <= 70.0 and 10.0 <= lat <= 25.0:
+            return lon, lat
+    return lat, lon
+
+
+def _coords_in_sweden_bbox(lat: float, lon: float) -> bool:
+    # Coarse Sweden bbox filter to remove malformed/outlier coordinates.
+    return 54.0 <= lat <= 70.5 and 10.0 <= lon <= 25.5
+
+
+def _normalize_polisen_events(raw_items: list[dict]) -> list[dict]:
+    events: list[dict] = []
+    for item in raw_items:
+        location = item.get("location") or {}
+        coords = _parse_polisen_gps(location.get("gps"))
+        if not coords:
+            continue
+        lat, lon = _normalize_sweden_coords(coords[0], coords[1])
+        if not _coords_in_sweden_bbox(lat, lon):
+            continue
+        events.append(
+            {
+                "id": item.get("id"),
+                "name": item.get("name") or item.get("type") or "Okand handelse",
+                "summary": item.get("summary") or "",
+                "type": item.get("type") or "",
+                "datetime": item.get("datetime"),
+                "location_name": location.get("name") or "",
+                "latitude": round(lat, 4),
+                "longitude": round(lon, 4),
+                "url": item.get("url") or "",
+            }
+        )
+    return events
+
+
+def _fetch_polisen_events_remote() -> list[dict]:
+    req = request.Request(
+        POLISEN_API_URL,
+        headers={
+            "User-Agent": POLISEN_USER_AGENT,
+            "Accept": "application/json",
+        },
+    )
+    with request.urlopen(req, timeout=POLISEN_TIMEOUT_SECONDS) as response:
+        payload = response.read().decode("utf-8")
+    data = json.loads(payload)
+    if not isinstance(data, list):
+        raise ValueError("Unexpected Police API response shape")
+    return _normalize_polisen_events(data)
+
+
+def _parse_kev_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        return None
+
+
+def _fetch_kev_summary_remote() -> dict:
+    req = request.Request(
+        CISA_KEV_URL,
+        headers={
+            "User-Agent": CISA_KEV_USER_AGENT,
+            "Accept": "application/json",
+        },
+    )
+    with request.urlopen(req, timeout=CISA_KEV_TIMEOUT_SECONDS) as response:
+        payload = response.read().decode("utf-8")
+    data = json.loads(payload)
+    vulnerabilities = data.get("vulnerabilities", [])
+    if not isinstance(vulnerabilities, list):
+        raise ValueError("Unexpected CISA KEV response shape")
+
+    now = datetime.now(UTC)
+    cutoff_30d = now - timedelta(days=30)
+    normalized = []
+    for item in vulnerabilities:
+        date_added = _parse_kev_date(item.get("dateAdded"))
+        normalized.append(
+            {
+                "cve": item.get("cveID", ""),
+                "vendor": item.get("vendorProject", ""),
+                "product": item.get("product", ""),
+                "date_added": item.get("dateAdded", ""),
+                "description": item.get("shortDescription", ""),
+                "ransomware_use": item.get("knownRansomwareCampaignUse", ""),
+            }
+        )
+
+    normalized.sort(key=lambda row: row["date_added"], reverse=True)
+    added_last_30d = sum(
+        1
+        for item in vulnerabilities
+        if (_parse_kev_date(item.get("dateAdded")) or datetime.min.replace(tzinfo=UTC)) >= cutoff_30d
+    )
+
+    return {
+        "source": "CISA KEV",
+        "fetched_at": now.isoformat(),
+        "total_known_exploited_cves": len(vulnerabilities),
+        "added_last_30_days": added_last_30d,
+        "latest": normalized[:8],
+    }
+
+
 @app.post("/upload")
 async def upload(request: Request, file: UploadFile = File(...)):
     client_ip = request.client.host if request.client else "unknown"
@@ -457,3 +623,101 @@ async def metrics_summary(limit: int = 1000):
     except Exception:
         logger.exception("Failed to build metrics summary")
         raise HTTPException(status_code=503, detail="Database unavailable")
+
+
+@app.get("/external/polisen/events")
+async def polisen_events():
+    global _polisen_last_attempt_monotonic, _polisen_cached_payload
+    global _polisen_cached_at_monotonic, _polisen_permanent_404
+
+    now = monotonic()
+    with _polisen_lock:
+        cached = _polisen_cached_payload
+        is_fresh = cached and (now - _polisen_cached_at_monotonic) <= POLISEN_CACHE_TTL_SECONDS
+        should_wait = (now - _polisen_last_attempt_monotonic) < POLISEN_MIN_SECONDS_BETWEEN_CALLS
+        permanent_404 = _polisen_permanent_404
+
+        if permanent_404:
+            if cached:
+                cached_copy = dict(cached)
+                cached_copy["warning"] = "Police API returned 404 earlier; serving cached data only"
+                return cached_copy
+            raise HTTPException(status_code=503, detail="Police API resource unavailable (404)")
+
+        if is_fresh:
+            return cached
+
+        if should_wait and cached:
+            return cached
+
+        # Mark outbound call attempt to enforce minimum interval globally.
+        _polisen_last_attempt_monotonic = now
+
+    try:
+        items = await asyncio.to_thread(_fetch_polisen_events_remote)
+        payload = {
+            "source": "polisen.se/api/events",
+            "fetched_at": datetime.now(UTC).isoformat(),
+            "count": len(items),
+            "events": items,
+        }
+        with _polisen_lock:
+            _polisen_cached_payload = payload
+            _polisen_cached_at_monotonic = monotonic()
+            _polisen_permanent_404 = False
+        return payload
+    except error.HTTPError as exc:
+        if exc.code == 404:
+            with _polisen_lock:
+                _polisen_permanent_404 = True
+                cached_after_error = _polisen_cached_payload
+            if cached_after_error:
+                fallback = dict(cached_after_error)
+                fallback["warning"] = "Police API resource not found (404); serving cached data"
+                return fallback
+            raise HTTPException(status_code=503, detail="Police API returned permanent 404")
+        with _polisen_lock:
+            cached_after_error = _polisen_cached_payload
+        if cached_after_error:
+            fallback = dict(cached_after_error)
+            fallback["warning"] = f"Police API unavailable ({exc.code}); serving cached data"
+            return fallback
+        raise HTTPException(status_code=503, detail="Police API unavailable")
+    except Exception:
+        logger.exception("Failed to fetch Police events")
+        with _polisen_lock:
+            cached_after_error = _polisen_cached_payload
+        if cached_after_error:
+            fallback = dict(cached_after_error)
+            fallback["warning"] = "Police API unavailable; serving cached data"
+            return fallback
+        raise HTTPException(status_code=503, detail="Police API unavailable")
+
+
+@app.get("/external/threats/kev-summary")
+async def kev_summary():
+    global _kev_last_attempt_monotonic, _kev_cached_payload, _kev_cached_at_monotonic
+    now = monotonic()
+    with _kev_lock:
+        cached = _kev_cached_payload
+        is_fresh = cached and (now - _kev_cached_at_monotonic) <= CISA_KEV_CACHE_TTL_SECONDS
+        should_wait = (now - _kev_last_attempt_monotonic) < CISA_KEV_MIN_SECONDS_BETWEEN_CALLS
+        if is_fresh or (should_wait and cached):
+            return cached
+        _kev_last_attempt_monotonic = now
+
+    try:
+        payload = await asyncio.to_thread(_fetch_kev_summary_remote)
+        with _kev_lock:
+            _kev_cached_payload = payload
+            _kev_cached_at_monotonic = monotonic()
+        return payload
+    except Exception:
+        logger.exception("Failed to fetch CISA KEV summary")
+        with _kev_lock:
+            cached = _kev_cached_payload
+        if cached:
+            fallback = dict(cached)
+            fallback["warning"] = "CISA KEV unavailable; serving cached data"
+            return fallback
+        raise HTTPException(status_code=503, detail="CISA KEV unavailable")

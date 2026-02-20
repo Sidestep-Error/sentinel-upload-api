@@ -114,6 +114,12 @@ Metrics summary (requires MongoDB)
 curl http://localhost:8080/metrics/summary
 ```
 
+Threat feed proxy (cached, backend controlled)
+
+```powershell
+curl http://localhost:8080/external/threats/kev-summary
+```
+
 Upload (PowerShell)
 
 ```powershell
@@ -172,6 +178,8 @@ Upload scanning behavior
   - `30-69` => `decision=review`
   - `70-100` => `decision=rejected`
 - Trend metrics are available at `/metrics/summary` with windows for `last_24h`, `last_7d`, and `all_time`.
+- CISA KEV feed is fetched via backend proxy `/external/threats/kev-summary` (cached and rate-limited).
+- KEV requests include explicit `User-Agent` and enforce minimum interval (`CISA_KEV_MIN_SECONDS_BETWEEN_CALLS`, default 300s).
 - Upload retention is controlled by MongoDB TTL index on `created_at` (default `UPLOAD_RETENTION_DAYS=30`).
 - Upload list defaults to `UPLOAD_LIST_LIMIT_DEFAULT=25` and is capped by `UPLOAD_LIST_LIMIT_MAX=100`.
 
