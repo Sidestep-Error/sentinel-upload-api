@@ -52,6 +52,12 @@ jobs:
         run: |
           pytest -q
 
+      - name: Download GeoIP Database
+        run: |
+          mkdir -p assets
+          curl -L "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXWIND_LICENSE_KEY }}&suffix=tar.gz" -o GeoLite2-City.tar.gz
+          tar -xzf GeoLite2-City.tar.gz --strip-components=1 -C assets
+
       - name: Build Docker image (no push)
         run: |
           docker build --pull --no-cache -f docker/Dockerfile -t sentinel-upload-api:ci .
@@ -131,7 +137,7 @@ jobs:
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             {
               echo "value<<EOF"
-              echo "${{ env.DOCKER_IMAGE }}:latest"
+              echo "${{ env.DOCKER_IMAGE }}:main"
               echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
@@ -143,6 +149,12 @@ jobs:
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Download GeoIP Database
+        run: |
+          mkdir -p assets
+          curl -L "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXWIND_LICENSE_KEY }}&suffix=tar.gz" -o GeoLite2-City.tar.gz
+          tar -xzf GeoLite2-City.tar.gz --strip-components=1 -C assets
 
       - name: Build and push image
         uses: docker/build-push-action@v6
