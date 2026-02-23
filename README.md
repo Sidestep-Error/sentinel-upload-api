@@ -225,6 +225,24 @@ CI troubleshooting (rate limit)
 - If CI should mimic production behavior, set CI variables to the same values as production env vars.
 - The rate-limit test overrides limiter constants in-test, so CI variable tuning should not break that test.
 
+Authentication (Firebase)
+
+- Set `AUTH_MODE=firebase` to require Firebase ID token on `/upload` and `/uploads`.
+- Set `FIREBASE_WEB_API_KEY=<your_web_api_key>` in environment (served by backend config endpoint).
+- Send token as `Authorization: Bearer <firebase_id_token>`.
+- Configure credentials using one of:
+  - `FIREBASE_CREDENTIALS_FILE=/path/to/service-account.json`
+  - `FIREBASE_CREDENTIALS_JSON='{"type":"service_account", ...}'`
+- Default mode is `AUTH_MODE=off` (no auth required).
+- The web UI includes an Auth Console for create account/login without manually entering API keys.
+
+CI troubleshooting (rate limit)
+
+- If CI gets unexpected `429` responses, increase `UPLOAD_RATE_LIMIT_PER_MINUTE_CI` (start with `120`, then `300` for bursty test runs).
+- Keep `UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI=60` unless you need a shorter/longer evaluation window.
+- If CI should mimic production behavior, set CI variables to the same values as production env vars.
+- The rate-limit test overrides limiter constants in-test, so CI variable tuning should not break that test.
+
 Publish on a subdomain (production outline)
 
 1. Create DNS record:

@@ -367,6 +367,9 @@
         try {
           const response = await fetch("/uploads?limit=25");
           if (!response.ok) {
+            if (response.status === 401) {
+              throw new Error("Auth required");
+            }
             throw new Error("Database unavailable");
           }
           const data = await response.json();
@@ -486,6 +489,7 @@
           setStatus("Uploading...");
           const response = await fetch("/upload", {
             method: "POST",
+            headers: requestHeaders(),
             body: formData,
           });
           const data = await response.json();
