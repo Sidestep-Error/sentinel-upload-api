@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pymongo import MongoClient, InsertOne, ASCENDING
 from pymongo.errors import BulkWriteError
 from typing import List, Dict, Optional, Set
-from hashlib import sha1
+from hashlib import sha256
 import ipaddress
 import socket
 from urllib.parse import urlparse
@@ -131,7 +131,7 @@ def _make_event(
         "details": details,
     }
     fingerprint = f"{event['source']}|{event['ioc']}|{event['event_day']}"
-    event["event_fingerprint"] = sha1(fingerprint.encode("utf-8")).hexdigest()
+    event["event_fingerprint"] = sha256(fingerprint.encode("utf-8")).hexdigest()
     return event
 
 def fetch_and_normalize_feodo_iocs() -> List[Dict]:
