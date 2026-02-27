@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -39,7 +39,13 @@
             <small>Secure DevSecOps Demo</small>
           </div>
         </div>
-        <div class="pill">build → scan → deploy</div>
+        <div class="nav-right">
+          <div class="pill">build → scan → deploy</div>
+          <button id="mode-indicator" class="mode-indicator" type="button" aria-label="Hidden mode toggle">
+            Mode: Secure
+          </button>
+        </div>
+        <div id="mode-tooltip" class="mode-tooltip" aria-hidden="true">switch mode</div>
       </div>
     </header>
 
@@ -81,7 +87,7 @@
             <div>Endpoint: <code>/upload</code></div>
           </div>
           <button class="button" id="upload-btn" type="button">Upload now</button>
-          <div class="status" id="status">Waiting for input…</div>
+          <div class="status" id="status">Waiting for inputâ€¦</div>
         </div>
         <div class="panel upload">
           <h2>Virus Scanning</h2>
@@ -141,9 +147,26 @@
       </section>
 
       <footer>
-        <p>Sentinel Upload API · NordTech AB · DevSecOps program</p>
+        <p>Sentinel Upload API Â· NordTech AB Â· DevSecOps program</p>
       </footer>
     </main>
+    <section id="easter-egg" class="easter-egg" aria-hidden="true">
+      <div id="easter-egg-rain" class="easter-egg-rain" aria-hidden="true"></div>
+      <div class="easter-egg-window" role="dialog" aria-modal="true" aria-labelledby="easter-egg-title">
+        <button id="easter-egg-close" class="easter-egg-close" type="button" aria-label="Close easter egg">
+          &times;
+        </button>
+        <h2 id="easter-egg-title">You found our easter egg!🐣</h2>
+        <div class="team-photos">
+          <img src="/static/assets/joline.png" alt="Team member 1" />
+          <img src="/static/assets/jon.png" alt="Team member 2" />
+          <img src="/static/assets/viktor.png" alt="Team member 3" />
+          <img src="/static/assets/stoffe.png" alt="Team member 4" />
+          <img src="/static/assets/albin.png" alt="Team member 5" />
+        </div>
+        <p class="easter-egg-thanks">Huge thanks from our dev team for your support✨</p>
+      </div>
+    </section>
 
     <script
       src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -174,6 +197,11 @@
       const metricRejected24hEl = document.getElementById("metric-rejected-24h");
       const metricRejectRate7dEl = document.getElementById("metric-reject-rate-7d");
       const metricRisk7dEl = document.getElementById("metric-risk-7d");
+      const modeIndicatorEl = document.getElementById("mode-indicator");
+      const modeTooltipEl = document.getElementById("mode-tooltip");
+      const easterEggEl = document.getElementById("easter-egg");
+      const easterEggCloseEl = document.getElementById("easter-egg-close");
+      const easterEggRainEl = document.getElementById("easter-egg-rain");
 
       const isDevHost =
         window.location.hostname === "localhost" ||
@@ -377,6 +405,149 @@
         input.click();
       });
 
+      
+      // Easter egg
+      let modeClickCount = 0;
+      let fabulousEnabled = false;
+      let rainCanvas = null;
+      let rainCtx = null;
+      let rainAnimationFrame = null;
+      let rainStreams = [];
+      let rainColumns = 0;
+      const rainFontSize = 16;
+      const rainColumnWidth = 18;
+      const rainGlyphs = "01010101<>[]{}()/\\=+-_#;:*$";
+
+      function randomRainGlyph() {
+        return rainGlyphs[Math.floor(Math.random() * rainGlyphs.length)];
+      }
+
+      function setFabulousMode(enabled) {
+        fabulousEnabled = enabled;
+        document.body.classList.toggle("fabulous-mode", enabled);
+        if (modeIndicatorEl) {
+          modeIndicatorEl.textContent = enabled ? "Mode: Fabulous" : "Mode: Secure";
+        }
+        if (easterEggEl) {
+          easterEggEl.classList.toggle("is-visible", enabled);
+          easterEggEl.setAttribute("aria-hidden", enabled ? "false" : "true");
+        }
+        if (!enabled) {
+          stopEasterEggRain();
+        } else {
+          initEasterEggRain();
+        }
+      }
+
+      function initEasterEggRain() {
+        if (!easterEggRainEl || rainAnimationFrame) return;
+        if (!rainCanvas) {
+          rainCanvas = document.createElement("canvas");
+          rainCanvas.className = "easter-egg-rain-canvas";
+          easterEggRainEl.innerHTML = "";
+          easterEggRainEl.appendChild(rainCanvas);
+          rainCtx = rainCanvas.getContext("2d");
+        }
+        resizeEasterEggRain();
+
+        const draw = () => {
+          if (!rainCtx || !rainCanvas) return;
+          rainCtx.fillStyle = "rgba(0, 0, 0, 1)";
+          rainCtx.fillRect(0, 0, rainCanvas.width, rainCanvas.height);
+          rainCtx.font = `${rainFontSize}px "JetBrains Mono", monospace`;
+          rainCtx.textAlign = "left";
+          rainCtx.textBaseline = "top";
+          rainCtx.shadowBlur = 10;
+          rainCtx.shadowColor = "rgba(255, 170, 227, 0.72)";
+
+          for (let i = 0; i < rainColumns; i += 1) {
+            const stream = rainStreams[i];
+            const x = i * rainColumnWidth + stream.jitter;
+            for (let c = 0; c < stream.length; c += 1) {
+              const y = stream.y - c * (rainFontSize * 0.9);
+              if (y < -rainFontSize || y > rainCanvas.height + rainFontSize) continue;
+              const alpha = 1 - (c / stream.length);
+              rainCtx.fillStyle = c === 0
+                ? `rgba(255, 244, 251, ${0.95 * alpha})`
+                : `rgba(255, 164, 227, ${0.82 * alpha})`;
+              rainCtx.fillText(randomRainGlyph(), x, y);
+            }
+
+            stream.y += stream.speed;
+            if (stream.y - stream.length * rainFontSize > rainCanvas.height + 40) {
+              stream.y = -Math.random() * rainCanvas.height * 0.8;
+              stream.speed = 0.24 + Math.random() * 0.22;
+              stream.length = 16 + Math.floor(Math.random() * 24);
+              stream.jitter = Math.floor(Math.random() * 4) - 2;
+            }
+          }
+          rainAnimationFrame = window.requestAnimationFrame(draw);
+        };
+
+        draw();
+      }
+
+      function resizeEasterEggRain() {
+        if (!rainCanvas || !easterEggRainEl) return;
+        const bounds = easterEggRainEl.getBoundingClientRect();
+        rainCanvas.width = Math.max(1, Math.floor(bounds.width));
+        rainCanvas.height = Math.max(1, Math.floor(bounds.height));
+        rainColumns = Math.ceil(rainCanvas.width / rainColumnWidth);
+        rainStreams = Array.from({ length: rainColumns }, () => ({
+          y: -Math.random() * rainCanvas.height,
+          speed: 0.24 + Math.random() * 0.22,
+          length: 16 + Math.floor(Math.random() * 24),
+          jitter: Math.floor(Math.random() * 4) - 2,
+        }));
+      }
+
+      function stopEasterEggRain() {
+        if (rainAnimationFrame) {
+          window.cancelAnimationFrame(rainAnimationFrame);
+          rainAnimationFrame = null;
+        }
+      }
+
+      if (modeIndicatorEl && modeTooltipEl) {
+        const showTooltip = () => modeTooltipEl.classList.add("is-visible");
+        const hideTooltip = () => modeTooltipEl.classList.remove("is-visible");
+
+        modeIndicatorEl.addEventListener("mouseenter", showTooltip);
+        modeIndicatorEl.addEventListener("mouseleave", hideTooltip);
+
+        modeIndicatorEl.addEventListener("mousemove", (event) => {
+          modeTooltipEl.style.left = `${event.clientX + 14}px`;
+          modeTooltipEl.style.top = `${event.clientY + 14}px`;
+        });
+
+        modeIndicatorEl.addEventListener("click", () => {
+          modeClickCount += 1;
+          if (modeClickCount === 3) {
+            setFabulousMode(true);
+            modeClickCount = 0;
+          }
+        });
+      }
+
+      if (easterEggCloseEl) {
+        easterEggCloseEl.addEventListener("click", () => {
+          setFabulousMode(false);
+          modeClickCount = 0;
+        });
+      }
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && fabulousEnabled) {
+          setFabulousMode(false);
+          modeClickCount = 0;
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        if (fabulousEnabled) {
+          resizeEasterEggRain();
+        }
+      });
       // Allow selecting the same file again after a previous upload.
       input.addEventListener("click", () => {
         input.value = "";
@@ -565,3 +736,6 @@
 
   </body>
 </html>
+
+
+

@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg-0: #070b08;
   --bg-1: #0c1410;
   --bg-2: #101f18;
@@ -448,7 +448,7 @@ button.button {
 }
 
 .list-item-toggle::after {
-  content: "▾";
+  content: "â–¾";
   justify-self: end;
   color: var(--muted);
   transition: transform 0.2s ease;
@@ -582,4 +582,174 @@ footer {
   text-decoration: none;
   box-shadow: 0 0 24px rgba(54, 255, 122, 0.35);
 }
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-indicator {
+  background: transparent;
+  border: 1px solid rgba(54, 255, 122, 0.35);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.mode-indicator:hover {
+  color: var(--text);
+  border-color: rgba(54, 255, 122, 0.75);
+}
+
+.mode-tooltip {
+  position: fixed;
+  z-index: 2200;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  background: rgba(7, 11, 8, 0.95);
+  border: 1px solid rgba(54, 255, 122, 0.4);
+  color: var(--text);
+  font-size: 0.75rem;
+  padding: 5px 8px;
+  border-radius: 8px;
+}
+
+.mode-tooltip.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.easter-egg {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  width: 100vw;
+  height: 100dvh;
+  padding: 0;
+  background: #000000;
+  overflow: hidden;
+  text-align: center;
+  isolation: isolate;
+}
+
+.easter-egg.is-visible {
+  display: grid;
+  place-items: center;
+}
+
+.easter-egg-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.easter-egg-rain-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+.easter-egg-window {
+  width: min(1040px, 94vw);
+  position: relative;
+  z-index: 1;
+  border-radius: 18px;
+  border: 1px solid rgb(241, 63, 194) !important;
+  background: linear-gradient(180deg, rgb(238, 89, 176), rgba(236, 137, 198, 1)) !important;
+  padding: 52px 22px 22px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.5);
+}
+
+.easter-egg-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 205, 239, 0.92);
+  background: rgba(255, 117, 211, 0.9);
+  color: var(--text);
+  font-size: 1.45rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.easter-egg-close:hover {
+  box-shadow: 0 0 18px rgba(255, 127, 207, 0.45);
+}
+
+.easter-egg h2 {
+  margin: 0;
+  color: #ffe9f8;
+  text-shadow: 0 0 14px rgba(255, 185, 235, 0.808);
+  font-size: clamp(1.8rem, 3.8vw, 3.2rem);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.team-photos {
+  width: min(1000px, 100%);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.team-photos img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 14px;
+  border: 2px solid rgba(255, 210, 241, 0.96);
+  box-shadow: 0 10px 30px rgba(253, 119, 208, 0.89), 0 0 22px rgba(255, 179, 233, 0.815);
+  background: linear-gradient(180deg, rgba(255, 232, 247, 0.95), rgba(255, 195, 232, 0.88));
+}
+
+.easter-egg-thanks {
+  margin: 14px 0 0;
+  color: #ffe9f8;
+  letter-spacing: 0.06em;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+}
+
+body.fabulous-mode {
+  --bg-0: #000000;
+  --bg-1: #14010c;
+  --bg-2: #18030f;
+  --grid: rgba(255, 145, 205, 0.18);
+  --neon: #ff7fcf;
+  --neon-2: #ff55bd;
+  --text: #ffeaf8;
+  --muted: #ffc9e8;
+  --panel: rgba(64, 8, 42, 0.72);
+  --stroke: rgba(255, 127, 207, 0.35);
+  overflow: hidden;
+}
+
+body.fabulous-mode > header,
+body.fabulous-mode > main,
+body.fabulous-mode > .grid,
+body.fabulous-mode > .glow,
+body.fabulous-mode > .bug-fab {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .team-photos {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+}
+
+
 
