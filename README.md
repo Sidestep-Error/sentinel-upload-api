@@ -32,7 +32,7 @@ CI pipeline
 - Validates Kubernetes and Gatekeeper manifests using `kubeconform`.
 - Runs tests with `pytest`.
 - Runs matrix tests on Python `3.11` and `3.12`.
-- Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
+- Builds Docker image, runs Trivy scan (fail on fixable HIGH/CRITICAL), and generates SBOM (Syft artifact).
 - Pushes Docker image to Docker Hub on `main` pushes after all checks pass.
 - Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `sidesteperror/sentinel-upload-api`).
 
