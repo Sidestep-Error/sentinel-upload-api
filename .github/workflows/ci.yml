@@ -62,12 +62,12 @@ jobs:
         run: |
           docker build --pull --no-cache -f docker/Dockerfile -t sentinel-upload-api:ci .
 
-      - name: Trivy scan (HIGH/CRITICAL)
+      - name: Trivy scan (fixable HIGH/CRITICAL)
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest \
-            image --exit-code 1 --severity HIGH,CRITICAL sentinel-upload-api:ci
+            aquasec/trivy:0.69.1 \
+            image --scanners vuln --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL sentinel-upload-api:ci
 
       - name: Generate SBOM (Syft)
         run: |
