@@ -28,3 +28,4 @@ Credentials/
 *service-account*.json
 k8s/base/secret.yaml
 GeoLite2-City.mmdb
+assets/GeoLite2-City*.tar.gz

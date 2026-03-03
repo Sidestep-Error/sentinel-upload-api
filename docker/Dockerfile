@@ -41,7 +41,6 @@ COPY app/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Kopiera applikationskod (utan tests, dev-config etc.)
-COPY app/ ./app/
 COPY --chown=appuser:appuser app/ ./app/
 
 # Skapa tmp-mapp som appuser kan skriva till
