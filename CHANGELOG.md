@@ -19,6 +19,7 @@
 - Documented that `daemon.json` applies to the Hetzner Linux server only and must not be applied to local Docker Desktop on Windows.
 - Documented that GitHub Actions secrets are CI-only and do not substitute for a local `.env` file during development.
 
+
 ## 2026-02-23
 
 - Added safer ThreatFox secret handling: `THREATFOX_API_KEY_FILE` support plus documented Secret-first usage across local/Kubernetes.
