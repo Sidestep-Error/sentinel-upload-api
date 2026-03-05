@@ -20,6 +20,6 @@ Out of scope:
 
 ## CI Security Checks
 
-- Container image scanning with Trivy (fail on HIGH/CRITICAL)
+- Container image scanning with Trivy (fail on fixable HIGH/CRITICAL)
 - SBOM generation with Syft (SPDX JSON artifact)
-- Base image hardened (Alpine)
+- Base image hardened (Debian slim)
