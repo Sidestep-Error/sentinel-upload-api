@@ -30,3 +30,5 @@ Credentials/
 GeoLite2-City.mmdb
 assets/GeoLite2-City*.tar.gz
 
+k8s/base/secret.yaml
+GeoLite2-City.mmdb
