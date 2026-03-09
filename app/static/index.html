@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -739,3 +739,569 @@
 
 
 
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sentinel Upload API</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="grid"></div>
+    <div class="glow"></div>
+
+    <header>
+      <div class="nav">
+        <div class="brand">
+          <img src="/static/assets/sidestep-logo.png" alt="Sidestep Error logo" />
+          <div>
+            <div>Sentinel Upload API</div>
+            <small>Secure DevSecOps Demo</small>
+          </div>
+        </div>
+        <div class="pill">build → scan → deploy</div>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy panel">
+          <h1>Secure Uploads, Zero Guesswork</h1>
+          <p>
+            A hardened file intake pipeline built for DevSecOps. Validate types,
+            enforce policy, and ship with confidence.
+          </p>
+          <div class="hero-map-wrap">
+            <div class="hero-map-head">
+              <h2>Incident Pulse (Visualized)</h2>
+              <small>Live Feodo/URLhaus/ThreatFox feed. GeoIP positions are approximate.</small>
+            </div>
+            <div id="threat-map" class="threat-map" aria-label="Threat activity map"></div>
+          </div>
+        </div>
+        <div class="panel map-panel">
+          <h2>Cyber Threat Feed (CISA KEV)</h2>
+          <div class="scan-grid" id="threat-feed-list">
+            <div class="scan-row"><span>Status</span><strong>Loading...</strong></div>
+          </div>
+          <p id="threat-feed-status" class="meta">Fetching latest known exploited vulnerabilities...</p>
+        </div>
+      </section>
+
+      <section id="upload" class="upload-layout">
+        <div class="panel upload">
+          <h2>Upload Console</h2>
+          <div class="dropzone" id="dropzone">
+            <p>Drop a file here or click to choose</p>
+            <label for="file-input">Choose file</label>
+            <input id="file-input" type="file" />
+          </div>
+          <div class="meta">
+            <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
+            <div>Endpoint: <code>/upload</code></div>
+          </div>
+          <button class="button" id="upload-btn" type="button">Upload now</button>
+          <div class="status" id="status">Waiting for input…</div>
+        </div>
+        <div class="panel upload">
+          <h2>Virus Scanning</h2>
+          <div class="scan-grid">
+            <div class="scan-row"><span>File</span><strong id="scan-file">-</strong></div>
+            <div class="scan-row"><span>Result</span><strong id="scan-status">No scan yet</strong></div>
+            <div class="scan-row"><span>Decision</span><strong id="scan-decision">-</strong></div>
+            <div class="scan-row"><span>Risk score</span><strong id="scan-risk">-</strong></div>
+            <div class="scan-row"><span>Engine</span><strong id="scan-engine">-</strong></div>
+            <div class="scan-row"><span>Detail</span><strong id="scan-detail">-</strong></div>
+            <div class="scan-row"><span>Deduplicated</span><strong id="scan-dedup">-</strong></div>
+          </div>
+          <div class="meta">
+            <div>Result updates after each upload.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="project-docs" class="panel">
+        <h2>Uploaded Files</h2>
+        <p>Latest uploads stored in MongoDB.</p>
+        <div class="list-header">
+          <span>Filename</span>
+          <span>Type</span>
+          <span>Status</span>
+        </div>
+        <div class="list" id="uploads-list">
+          <div class="list-item">Loading...</div>
+        </div>
+        <div id="dev-docs" class="dev-only">
+          <p class="meta">
+            Developer API docs: <a href="/docs">/docs</a>
+          </p>
+          <p class="meta">
+            Project docs: README.md, PLAN.md, SECURITY.md, docs/*, sre/*, runbooks/*
+          </p>
+        </div>
+      </section>
+
+      <section class="cards">
+        <div class="card">
+          <h3>Uploads (24h)</h3>
+          <p id="metric-uploads-24h">-</p>
+        </div>
+        <div class="card">
+          <h3>Rejected (24h)</h3>
+          <p id="metric-rejected-24h">-</p>
+        </div>
+        <div class="card">
+          <h3>Rejection Rate (7d)</h3>
+          <p id="metric-reject-rate-7d">-</p>
+        </div>
+        <div class="card">
+          <h3>Average Risk (7d)</h3>
+          <p id="metric-risk-7d">-</p>
+        </div>
+      </section>
+
+      <footer>
+        <p>Sentinel Upload API · NordTech AB · DevSecOps program</p>
+      </footer>
+    </main>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    <script>
+      const threatFeedStatusEl = document.getElementById("threat-feed-status");
+      const threatFeedListEl = document.getElementById("threat-feed-list");
+      const threatMapEl = document.getElementById("threat-map");
+      let threatMap = null;
+      let threatMapLayer = null;
+
+      const dropzone = document.getElementById("dropzone");
+      const input = document.getElementById("file-input");
+      const uploadBtn = document.getElementById("upload-btn");
+      const statusEl = document.getElementById("status");
+      const scanFileEl = document.getElementById("scan-file");
+      const scanStatusEl = document.getElementById("scan-status");
+      const scanDecisionEl = document.getElementById("scan-decision");
+      const scanRiskEl = document.getElementById("scan-risk");
+      const scanEngineEl = document.getElementById("scan-engine");
+      const scanDetailEl = document.getElementById("scan-detail");
+      const scanDedupEl = document.getElementById("scan-dedup");
+      const devDocsEl = document.getElementById("dev-docs");
+      const metricUploads24hEl = document.getElementById("metric-uploads-24h");
+      const metricRejected24hEl = document.getElementById("metric-rejected-24h");
+      const metricRejectRate7dEl = document.getElementById("metric-reject-rate-7d");
+      const metricRisk7dEl = document.getElementById("metric-risk-7d");
+
+      const isDevHost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1" ||
+        window.location.hostname === "[::1]";
+      if (isDevHost && devDocsEl) {
+        devDocsEl.classList.add("is-visible");
+      }
+      function setStatus(message, type) {
+        statusEl.textContent = message;
+        statusEl.classList.remove("error", "warn");
+        if (type) statusEl.classList.add(type);
+      }
+
+      function setScanResult(data) {
+        scanFileEl.textContent = data.filename || "-";
+        scanStatusEl.textContent = data.scan_status || "unknown";
+        scanDecisionEl.textContent = data.decision || "-";
+        scanRiskEl.textContent =
+          typeof data.risk_score === "number" ? `${data.risk_score}/100` : "-";
+        scanEngineEl.textContent = data.scan_engine || "-";
+        scanDetailEl.textContent = data.scan_detail || "-";
+        scanDedupEl.textContent = data.deduplicated ? "Yes" : "No";
+
+        scanStatusEl.classList.remove("status-clean", "status-malicious", "status-error");
+        scanDecisionEl.classList.remove("status-clean", "status-malicious", "status-review");
+
+        if (data.scan_status === "clean") {
+          scanStatusEl.classList.add("status-clean");
+        } else if (data.scan_status === "malicious") {
+          scanStatusEl.classList.add("status-malicious");
+        } else {
+          scanStatusEl.classList.add("status-error");
+        }
+
+        if (data.decision === "accepted") {
+          scanDecisionEl.classList.add("status-clean");
+        } else if (data.decision === "rejected") {
+          scanDecisionEl.classList.add("status-malicious");
+        } else if (data.decision === "review") {
+          scanDecisionEl.classList.add("status-review");
+        }
+      }
+
+      function setMetrics(data) {
+        if (!data) return;
+        const last24h = data.last_24h || {};
+        const last7d = data.last_7d || {};
+        metricUploads24hEl.textContent = `${last24h.total_uploads ?? 0}`;
+        metricRejected24hEl.textContent = `${last24h.rejected ?? 0}`;
+        metricRejectRate7dEl.textContent = `${last7d.rejection_rate_percent ?? 0}%`;
+        metricRisk7dEl.textContent = `${last7d.avg_risk_score ?? 0}/100`;
+      }
+
+      function detailRow(label, value, valueClass) {
+        const row = document.createElement("div");
+        row.className = "scan-row";
+        const labelEl = document.createElement("span");
+        labelEl.textContent = label;
+        const valueEl = document.createElement("strong");
+        valueEl.textContent = value;
+        if (valueClass) valueEl.classList.add(valueClass);
+        row.appendChild(labelEl);
+        row.appendChild(valueEl);
+        return row;
+      }
+
+      function renderThreatFeed(payload) {
+        if (!threatFeedListEl) return;
+        const latest = payload.latest || [];
+        threatFeedListEl.innerHTML = "";
+
+        const summaryRows = [
+          ["Source", payload.source || "CISA KEV"],
+          ["Total KEV", String(payload.total_known_exploited_cves ?? 0)],
+          ["Added 30d", String(payload.added_last_30_days ?? 0)],
+        ];
+        summaryRows.forEach(([label, value]) => {
+          const row = document.createElement("div");
+          row.className = "scan-row";
+          row.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+          threatFeedListEl.appendChild(row);
+        });
+
+        latest.slice(0, 5).forEach((item) => {
+          const row = document.createElement("div");
+          row.className = "scan-row";
+          row.innerHTML = `<span>${item.cve || "CVE"}</span><strong>${item.vendor || ""} ${item.product || ""} (${item.date_added || ""})</strong>`;
+          threatFeedListEl.appendChild(row);
+        });
+
+        threatFeedStatusEl.textContent = `Updated ${payload.fetched_at || "recently"} via ${payload.source || "CISA KEV"}.`;
+        if (payload.warning) {
+          threatFeedStatusEl.textContent = payload.warning;
+        }
+      }
+
+      function initThreatMap() {
+        if (!threatMapEl || typeof L === "undefined") return;
+        const worldBounds = L.latLngBounds(
+          L.latLng(-85, -180),
+          L.latLng(85, 180),
+        );
+        threatMap = L.map("threat-map", {
+          zoomControl: false,
+          attributionControl: true,
+          minZoom: 1,
+          maxZoom: 8,
+          maxBounds: worldBounds,
+          maxBoundsViscosity: 1.0,
+        }).setView([20, 0], 2);
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+          maxZoom: 8,
+          subdomains: "abcd",
+          noWrap: true,
+          attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+        }).addTo(threatMap);
+        if (typeof L.markerClusterGroup === "function") {
+          threatMapLayer = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            spiderfyOnMaxZoom: true,
+            maxClusterRadius: 42,
+          });
+          threatMap.addLayer(threatMapLayer);
+        } else {
+          threatMapLayer = L.layerGroup().addTo(threatMap);
+        }
+      }
+
+      function renderThreatMap(events) {
+        if (!threatMap || !threatMapLayer) return;
+        threatMapLayer.clearLayers();
+        const points = [];
+        const coordBuckets = new Map();
+        (events || []).forEach((item) => {
+          const lat = Number(item.lat);
+          const lon = Number(item.lon);
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+          const severity = (item.severity || "").toLowerCase();
+          const size = severity === "high" ? 8 : severity === "medium" ? 7 : 6;
+          const bucketKey = `${lat.toFixed(4)},${lon.toFixed(4)}`;
+          const bucketIndex = coordBuckets.get(bucketKey) || 0;
+          coordBuckets.set(bucketKey, bucketIndex + 1);
+
+          // If several events share identical coordinates, fan them out slightly
+          // so all markers become visible instead of stacking as one.
+          const angle = bucketIndex * (Math.PI / 4);
+          const radius = Math.floor(bucketIndex / 8) * 0.18 + (bucketIndex > 0 ? 0.12 : 0);
+          const markerLat = lat + radius * Math.sin(angle);
+          const markerLon = lon + radius * Math.cos(angle);
+
+          const icon = L.divIcon({
+            className: "threat-dot",
+            iconSize: [size, size],
+            iconAnchor: [Math.floor(size / 2), Math.floor(size / 2)],
+          });
+          const marker = L.marker([markerLat, markerLon], { icon, title: item.ioc || item.type || "Threat event" }).addTo(threatMapLayer);
+          marker.bindPopup(
+            `<strong>${item.type || "Threat event"}</strong><br>` +
+            `${item.ioc || ""}<br>` +
+            `${item.details?.city || ""} ${item.details?.country ? `(${item.details.country})` : ""}<br>` +
+            `${item.details?.malware_family ? `Malware: ${item.details.malware_family}<br>` : ""}` +
+            `${item.details?.status ? `Status: ${item.details.status}<br>` : ""}` +
+            `${typeof item.confidence === "number" ? `Confidence: ${item.confidence}%<br>` : ""}` +
+            `${item.source || ""}<br>` +
+            `${item.timestamp || ""}`
+          );
+          points.push([markerLat, markerLon]);
+        });
+        if (points.length > 1) {
+          threatMap.fitBounds(points, { padding: [20, 20], maxZoom: 6 });
+        }
+      }
+
+      dropzone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        dropzone.classList.add("dragover");
+      });
+
+      dropzone.addEventListener("dragleave", () => {
+        dropzone.classList.remove("dragover");
+      });
+
+      dropzone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        dropzone.classList.remove("dragover");
+        if (event.dataTransfer.files.length) {
+          input.files = event.dataTransfer.files;
+          setStatus(`Selected ${input.files[0].name}`);
+        }
+      });
+
+      // Avoid double file-picker dialogs on browsers that already trigger via <label for>.
+      dropzone.addEventListener("click", (event) => {
+        const target = event.target;
+        const isLabelOrInput =
+          target instanceof HTMLElement &&
+          (target.tagName === "LABEL" || target.tagName === "INPUT");
+        if (isLabelOrInput) return;
+        input.click();
+      });
+
+      // Allow selecting the same file again after a previous upload.
+      input.addEventListener("click", () => {
+        input.value = "";
+      });
+      input.addEventListener("change", () => {
+        if (input.files.length) {
+          setStatus(`Selected ${input.files[0].name}`);
+        }
+      });
+
+      async function loadUploads() {
+        try {
+          const response = await fetch("/uploads?limit=25");
+          if (!response.ok) {
+            if (response.status === 401) {
+              throw new Error("Auth required");
+            }
+            throw new Error("Database unavailable");
+          }
+          const data = await response.json();
+          const list = document.getElementById("uploads-list");
+          list.innerHTML = "";
+          if (!data.items.length) {
+            list.innerHTML = '<div class="list-item">No uploads yet</div>';
+            return;
+          }
+          data.items.forEach((item) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "upload-item";
+
+            const row = document.createElement("div");
+            row.className = "list-item list-item-toggle";
+            row.setAttribute("role", "button");
+            row.setAttribute("tabindex", "0");
+            row.setAttribute("aria-expanded", "false");
+            row.title = "Click to show scan details";
+            const nameSpan = document.createElement("span");
+            nameSpan.textContent = item.filename;
+            const typeSpan = document.createElement("span");
+            typeSpan.textContent = item.content_type;
+            const statusSpan = document.createElement("span");
+            statusSpan.textContent = item.status;
+            if (item.status === "rejected") {
+              statusSpan.classList.add("status-malicious");
+            } else if (item.status === "accepted") {
+              statusSpan.classList.add("status-clean");
+            } else {
+              statusSpan.classList.add("status-review");
+            }
+            row.appendChild(nameSpan);
+            row.appendChild(typeSpan);
+            row.appendChild(statusSpan);
+
+            const details = document.createElement("div");
+            details.className = "upload-details";
+            details.hidden = true;
+            details.style.display = "none";
+            details.appendChild(detailRow("Result", item.scan_status || "unknown"));
+            details.appendChild(detailRow("Decision", item.decision || "-", item.decision === "rejected" ? "status-malicious" : item.decision === "accepted" ? "status-clean" : "status-review"));
+            details.appendChild(detailRow("Risk score", typeof item.risk_score === "number" ? `${item.risk_score}/100` : "-"));
+            details.appendChild(detailRow("Engine", item.scan_engine || "-"));
+            details.appendChild(detailRow("Detail", item.scan_detail || "-"));
+            details.appendChild(detailRow("Deduplicated", item.deduplicated ? "Yes" : "No"));
+            details.appendChild(detailRow("SHA-256", item.sha256 || "-"));
+
+            const toggleDetails = () => {
+              const isOpen = wrapper.classList.toggle("is-open");
+              details.hidden = !isOpen;
+              details.style.display = isOpen ? "grid" : "none";
+              row.setAttribute("aria-expanded", isOpen ? "true" : "false");
+              // Keep the side panel in sync with selected row.
+              setScanResult(item);
+            };
+            row.addEventListener("click", toggleDetails);
+            row.addEventListener("keydown", (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                toggleDetails();
+              }
+            });
+
+            wrapper.appendChild(row);
+            wrapper.appendChild(details);
+            list.appendChild(wrapper);
+          });
+        } catch (error) {
+          const list = document.getElementById("uploads-list");
+          list.innerHTML = `<div class="list-item">${error.message}</div>`;
+        }
+      }
+
+      async function loadMetrics() {
+        try {
+          const response = await fetch("/metrics/summary");
+          if (!response.ok) {
+            throw new Error("Metrics unavailable");
+          }
+          const data = await response.json();
+          setMetrics(data);
+        } catch (_error) {
+          metricUploads24hEl.textContent = "-";
+          metricRejected24hEl.textContent = "-";
+          metricRejectRate7dEl.textContent = "-";
+          metricRisk7dEl.textContent = "-";
+        }
+      }
+
+      async function loadThreatFeed() {
+        try {
+          const response = await fetch("/external/threats/kev-summary");
+          if (!response.ok) {
+            throw new Error("Threat feed unavailable");
+          }
+          const data = await response.json();
+          renderThreatFeed(data);
+        } catch (_error) {
+          if (threatFeedStatusEl) {
+            threatFeedStatusEl.textContent = "Unable to load threat feed right now.";
+          }
+        }
+      }
+
+      async function loadThreatMapEvents() {
+        try {
+          const response = await fetch("/api/v1/threats/?limit=200");
+          if (!response.ok) {
+            throw new Error("Threat map data unavailable");
+          }
+          const events = await response.json();
+          renderThreatMap(events);
+        } catch (_error) {
+          if (threatMapLayer) {
+            threatMapLayer.clearLayers();
+          }
+        }
+      }
+
+      uploadBtn.addEventListener("click", async () => {
+        if (!input.files.length) {
+          setStatus("Choose a file first.", "warn");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", input.files[0]);
+
+        try {
+          setStatus("Uploading...");
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || "Upload failed");
+          }
+          setStatus(`Accepted: ${data.filename} (${data.content_type})`);
+          setScanResult(data);
+          await loadUploads();
+          await loadMetrics();
+        } catch (error) {
+          setStatus(error.message, "error");
+        }
+      });
+
+      loadUploads();
+      loadMetrics();
+      initThreatMap();
+      loadThreatFeed();
+      loadThreatMapEvents();
+      setInterval(() => {
+        loadThreatFeed();
+        loadThreatMapEvents();
+      }, 60000);
+    </script>
+    <a
+  class="bug-fab"
+  href="https://github.com/Sidestep-Error/sentinel-upload-api/issues/new/choose"
+  target="_blank"
+  rel="noopener noreferrer"
+  aria-label="Report a bug"
+>
+  Report bug
+</a>
+
+  </body>
+</html>

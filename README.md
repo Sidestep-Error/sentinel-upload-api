@@ -32,9 +32,15 @@ CI pipeline
 - Validates Kubernetes and Gatekeeper manifests using `kubeconform`.
 - Runs tests with `pytest`.
 - Runs matrix tests on Python `3.11` and `3.12`.
-- Builds Docker image, runs Trivy scan (HIGH/CRITICAL), and generates SBOM (Syft artifact).
+- Builds Docker image, runs Trivy scan (fail on fixable HIGH/CRITICAL), and generates SBOM (Syft artifact).
 - Pushes Docker image to Docker Hub on `main` pushes after all checks pass.
 - Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `sidesteperror/sentinel-upload-api`).
+
+CI troubleshooting (new run vs re-run)
+
+- `Re-run jobs` reruns the same historical workflow commit and can therefore use old CI logic.
+- To run the latest workflow version, use `Actions -> CI -> Run workflow` (enabled via `workflow_dispatch`).
+- If `Run workflow` is not visible, push a new commit (or an empty commit) to trigger a fresh run on the latest commit.
 
 Run locally (Docker)
 
