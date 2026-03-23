@@ -5,8 +5,10 @@
 #
 #   cp terraform.tfvars.example terraform.tfvars
 
-kubeconfig_path   = "~/.kube/sidestep-error-kubeconfig.yaml"
-namespace         = "sidestep-error"
-team_name         = "sidestep-error"
+kubeconfig_path   = "~/.kube/<ditt-namespace>-kubeconfig.yaml"
+namespace         = "<ditt-namespace>"
+team_name         = "<ditt-namespace>"
 mongodb_uri       = "mongodb+srv://<user>:<password>@<cluster>/<db>?retryWrites=true&w=majority"
 threatfox_api_key = "<din-nyckel-från-abuse.ch>"
+
+
