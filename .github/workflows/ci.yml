@@ -261,13 +261,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # GCP SA-nyckeln används för två saker:
+      # GCP_TF_SA_KEY är en separat SA med storage.objectAdmin på GCS-bucketen.
+      # Används för:
       #   1. Autentisering mot GCS-bucketen (remote state)
       #   2. Autentisering mot GCP-klustret via kubeconfig
+      # GCP_SA_KEY (student-registry-push) saknar bucket-access och används
+      # enbart för Artifact Registry-push i gcp-push-jobbet.
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.GCP_TF_SA_KEY }}
 
       # Dekodas till ~/.kube/config — matchar TF_VAR_kubeconfig_path ovan
       - name: Set up kubeconfig
