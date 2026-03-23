@@ -1,0 +1,57 @@
+# kustomization.yaml — GCP-overlay för sidestep-error-namespacet
+#
+# Vad är Kustomize?
+#   Kustomize låter oss anpassa Kubernetes-manifests för olika miljöer
+#   utan att duplicera filer. Den här overlayern ärver från k8s/base/
+#   och lägger på GCP-specifika ändringar ovanpå.
+#
+# Varför cherry-picka base-filer istället för att referera hela base/?
+#   Base innehåller Hetzner-specifika resurser (ClusterIssuer för cert-manager,
+#   Ingress med sentinel-upload.secion.se) som inte finns/fungerar i GCP-klustret.
+#   Genom att lista enskilda filer kan vi inkludera bara det som är relevant.
+#
+# Vad hanteras INTE här (och var hanteras det istället)?
+#   - secret.yaml       → Terraform (infra/terraform/sentinel/)
+#   - ingress.yaml      → Ej konfigurerat ännu, GCP-klustrets setup är okänd
+#   - clusterissuer     → Hetzner-specifik cert-manager, finns ej på GCP
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Skriver over namespace på alla inkluderade resurser.
+# Kustomize applicerar detta på metadata.namespace för varje resurs.
+namespace: sidestep-error
+
+resources:
+  # Eget namespace.yaml (sidestep-error) — inte base/namespace.yaml (sentinel)
+  - namespace.yaml
+  # Dedikerad ServiceAccount — krävs av OPA-policyn no-default-sa i GCP-klustret
+  - serviceaccount.yaml
+  # Delade resurser från base — fungerar i båda miljöerna utan ändringar
+  - ../../base/configmap.yaml
+  - ../../base/clamav-deployment.yaml
+  - ../../base/clamav-service.yaml
+  - ../../base/deployment.yaml
+  - ../../base/service.yaml
+  - ../../base/networkpolicy.yaml
+  # secret.yaml ingår INTE — hanteras av Terraform.
+  # Se infra/terraform/sentinel/ och docs/terraform-sentinel.md
+
+# Byter ut image-referensen från Docker Hub till GCP Artifact Registry.
+# Varför GCP AR istället för Docker Hub?
+#   - Auth via befintlig GCP SA-nyckel — inget extra konto behövs
+#   - Imagen är i samma GCP-region som klustret → kortare pull-tid
+#   - Tydligare separation: Hetzner ← Docker Hub, GCP ← Artifact Registry
+#
+# Taggen (:main) skrivs över i CI med exakt commit-SHA via:
+#   kustomize edit set image jonitsx/sentinel-upload-api=...jonitsx-app:<SHA>
+# Varför SHA och inte :main? En mutable tag kan pekas om utan att k8s märker det.
+images:
+  - name: jonitsx/sentinel-upload-api
+    newName: europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app
+    newTag: main  # ersätts med github.sha i CI — se .github/workflows/ci.yml
+
+# Patchar deployment för att använda den Terraform-skapade ServiceAccount:n.
+# Kopplingen: Terraform skapar SA → patch refererar SA → OPA-policyn nöjd.
+patches:
+  - path: deployment-patch.yaml

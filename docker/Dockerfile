@@ -53,8 +53,9 @@ USER appuser
 # Exponera port (dokumentation, ej faktisk portbindning)
 EXPOSE 8000
 
-# Kopiera GeoLite2-databasen (som inte är i .gitignore) till image:en
-COPY assets/GeoLite2-City.mmdb /app/assets/GeoLite2-City.mmdb
+# Healthcheck i imagen (docker-compose overridar med sin healthcheck)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
 
 # Kör Uvicorn (FastAPI)
 CMD ["sh", "-c", "python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
