@@ -20,6 +20,16 @@
 #   - Deployment/Service: hanteras av CI via k8s/overlays/gcp/
 
 terraform {
+  # Remote state lagras i teamets GCS-bucket.
+  # Varför remote state?
+  #   - Delas av hela teamet — ingen lokal tfstate som kan gå ur sync
+  #   - Bucket ägs av kursmiljön, teamet har storage.objectAdmin
+  #   - Prefix separerar sentinel-state från Lab 1/2 state i samma bucket
+  backend "gcs" {
+    bucket = "chas-tf-state-sidestep-error"
+    prefix = "sentinel-upload"
+  }
+
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
