@@ -285,7 +285,6 @@ jobs:
 
       # Applicerar hela GCP-overlayern — namespace, SA, configmap, deployment m.m.
       # Idempotent: säkert att köra flera gånger utan bieffekter
-<<<<<<< HEAD
       #
       # Varför kustomize build + kubectl apply och inte kubectl apply -k?
       #   Kustomize v5 har en säkerhetsrestriktion (load restrictor) som blockerar
@@ -294,10 +293,6 @@ jobs:
       #   vilket krävs för vårt overlay-mönster.
       - name: Apply GCP overlay
         run: kustomize build --load-restrictor LoadRestrictionsNone k8s/overlays/gcp/ | kubectl apply -f -
-=======
-      - name: Apply GCP overlay
-        run: kubectl apply -k k8s/overlays/gcp/
->>>>>>> 89c7cc0e59d36386c68d3b2c405c5074aca93dca
 
       # Väntar på att nya pods är Running och gamla är terminerade.
       # Misslyckas jobbet här rullar k8s automatiskt tillbaka till föregående revision.
