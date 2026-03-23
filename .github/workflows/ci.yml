@@ -175,3 +175,126 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.value }}
+
+  # ─────────────────────────────────────────────────────────────
+  # GCP-PUSH: Bygger och pushar imagen till GCP Artifact Registry
+  # Körs parallellt med dockerhub-push — båda väntar bara på
+  # test-and-build och matrix-tests, inte på varandra.
+  #
+  # Varför GCP AR och inte Docker Hub för GCP-deployment?
+  #   - Auth sker via befintlig GCP_SA_KEY (inget extra Docker Hub-konto)
+  #   - Imagen är i samma GCP-region som klustret → kortare pull-tid
+  #   - Tydligare separation: Hetzner ← Docker Hub, GCP ← Artifact Registry
+  # ─────────────────────────────────────────────────────────────
+  gcp-push:
+    name: GCP Artifact Registry push
+    # Pinnad version för reproducerbarhet — undvik ubuntu-latest
+    runs-on: ubuntu-24.04
+    needs: [test-and-build, matrix-tests]
+    # Körs bara vid push till main — inte på PRs eller develop
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Autentiserar mot GCP med service account JSON.
+      # Använd google-github-actions/auth@v2 — INTE docker/login-action med _json_key.
+      # Anledning: docker/login-action ger "uploadArtifacts denied" i denna GCP-miljö.
+      # Se docs/ci_cd_notes.md för detaljer.
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
+
+      # GeoIP-databasen krävs av Dockerfile — bäddas in i imagen vid bygget
+      - name: Download GeoIP Database
+        run: |
+          mkdir -p assets
+          curl -L "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXWIND_LICENSE_KEY }}&suffix=tar.gz" -o GeoLite2-City.tar.gz
+          tar -xzf GeoLite2-City.tar.gz --strip-components=1 -C assets
+
+      # Pushar med två taggar:
+      #   :main     — "senaste stabila", används av kustomization.yaml som fallback
+      #   :SHA      — exakt commit, används av deploy-gcp för reproducerbar deploy
+      - name: Build and push to GCP Artifact Registry
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:main
+            europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:${{ github.sha }}
+
+  # ─────────────────────────────────────────────────────────────
+  # DEPLOY-GCP: Applicerar k8s/overlays/gcp/ på GCP-klustret
+  # Körs efter gcp-push — imagen måste finnas i AR innan deploy.
+  #
+  # Varför Kustomize och inte kubectl apply -f direkt?
+  #   - Kustomize hanterar namespace-override och image-swap utan
+  #     att vi rör base-filerna (Hetzner-deploymentet påverkas ej)
+  #   - SHA-pinning via "kustomize edit set image" garanterar att
+  #     exakt rätt image deployas, inte bara ":main"-taggen
+  # ─────────────────────────────────────────────────────────────
+  deploy-gcp:
+    name: Deploy to GCP (sidestep-error)
+    runs-on: ubuntu-24.04
+    # Väntar på gcp-push — imagen måste finnas i AR
+    needs: [gcp-push]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      # Hämtar kustomize från pinnad release — undviker breaking changes från "latest"
+      - name: Install kustomize
+        run: |
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin
+
+      # Kubeconfigen lagras base64-kodad i GitHub Secrets och dekodas till en
+      # temporär fil. Filen raderas alltid i cleanup-steget nedan (if: always()).
+      # Skickas via env var — INTE inline i shell — för att undvika
+      # specialtecken-tolkningsproblem (samma mönster som GCP_SA_KEY).
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_GCP_B64: ${{ secrets.KUBECONFIG_GCP_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_GCP_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # Skriver in exakt SHA i kustomization.yaml innan apply.
+      # Varför SHA och inte :main-taggen?
+      #   En mutable tag som :main kan pekas om till en annan image utan att
+      #   k8s märker det. Med SHA vet vi exakt vad som kör — viktigt för
+      #   spårbarhet vid incident response. Samma princip som cosign-signering.
+      - name: Pin image to commit SHA in overlay
+        run: |
+          cd k8s/overlays/gcp
+          kustomize edit set image \
+            jonitsx/sentinel-upload-api=europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:${{ github.sha }}
+
+      # Applicerar hela GCP-overlayern — namespace, SA, configmap, deployment m.m.
+      # Idempotent: säkert att köra flera gånger utan bieffekter
+      - name: Apply GCP overlay
+        run: kubectl apply -k k8s/overlays/gcp/
+
+      # Väntar på att nya pods är Running och gamla är terminerade.
+      # Misslyckas jobbet här rullar k8s automatiskt tillbaka till föregående revision.
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/sentinel-upload-api -n sidestep-error --timeout=120s
+
+      # Raderar kubeconfigen oavsett om tidigare steg lyckades eller ej (if: always()).
+      # Förhindrar att credentials läcker om jobbet kraschar mitt i körningen.
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f ~/.kube/config

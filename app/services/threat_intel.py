@@ -36,7 +36,7 @@ def _parse_allowed_sources(raw: str) -> Set[str]:
 def _load_secret_env_value(name: str, file_path: str) -> str:
     direct_value = os.getenv(name, "")
     if direct_value:
-        return direct_value
+        return direct_value.strip()
     if not file_path:
         return ""
     try:

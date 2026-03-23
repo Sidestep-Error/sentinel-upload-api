@@ -1,0 +1,12 @@
+# terraform.tfvars.example
+#
+# Kopiera till terraform.tfvars och fyll i riktiga värden.
+# OBS: terraform.tfvars är gitignorerad och ska ALDRIG committas.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+kubeconfig_path   = "~/.kube/sidestep-error-kubeconfig.yaml"
+namespace         = "sidestep-error"
+team_name         = "sidestep-error"
+mongodb_uri       = "mongodb+srv://<user>:<password>@<cluster>/<db>?retryWrites=true&w=majority"
+threatfox_api_key = "<din-nyckel-från-abuse.ch>"

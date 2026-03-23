@@ -17,6 +17,9 @@ spec:
         app.kubernetes.io/name: sentinel-upload-api
         app.kubernetes.io/part-of: sentinel-platform
     spec:
+      # Pod-nivå securityContext gäller alla containers i poden.
+      # runAsUser/Group 10001 matchar den non-root användare som
+      # sätts upp i Dockerfile — OPA-policyn require-non-root kräver detta.
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
@@ -24,15 +27,24 @@ spec:
         fsGroup: 10001
       containers:
         - name: api
+          # GCP-overlay byter ut denna image mot GCP Artifact Registry via Kustomize.
+          # imagePullPolicy: Always säkerställer att :main-taggen alltid hämtar
+          # senaste imagen — förutsätter att CI pushat ny image innan deploy.
           image: jonitsx/sentinel-upload-api:main
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          # Konfiguration och secrets injiceras som miljövariabler.
+          # Separationen ConfigMap/Secret gör att känsliga värden aldrig
+          # hamnar i ConfigMap (som inte är krypterad i klustret).
           envFrom:
             - configMapRef:
                 name: sentinel-app-config
             - secretRef:
                 name: sentinel-app-secrets
+          # Liveness: k8s startar om containern om /health slutar svara.
+          # Readiness: k8s skickar ingen trafik till containern förrän den svarar.
+          # Separata probes gör att appen kan vara "levande men inte redo" under uppstart.
           livenessProbe:
             httpGet:
               path: /health
@@ -45,6 +57,8 @@ spec:
               port: 8000
             initialDelaySeconds: 3
             periodSeconds: 5
+          # Resource limits krävs av OPA-policyn require-resource-limits.
+          # Requests: garanterad tilldelning. Limits: hårt tak — överstigs → OOM-kill.
           resources:
             requests:
               cpu: 100m
@@ -52,6 +66,13 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          # Container-nivå securityContext — hårdare begränsningar än pod-nivå.
+          # allowPrivilegeEscalation: false — förhindrar sudo/setuid-eskalering
+          # readOnlyRootFilesystem: true  — OPA-policyn require-readonly-rootfs,
+          #   skyddar mot att en angripare skriver till filsystemet.
+          #   /tmp monteras separat via emptyDir nedan för att tillåta temporära filer.
+          # capabilities drop ALL — tar bort alla Linux-capabilities (nätverksrå,
+          #   mount, ptrace m.m.) som containern annars ärver.
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -63,5 +84,8 @@ spec:
             - name: tmp
               mountPath: /tmp
       volumes:
+        # emptyDir lever lika länge som poden — raderas vid omstart.
+        # Krävs eftersom readOnlyRootFilesystem: true blockerar skrivning till /tmp
+        # i containerns eget filsystem. Appen skriver temporära filer dit under scanning.
         - name: tmp
           emptyDir: {}
