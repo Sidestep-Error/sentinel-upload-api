@@ -167,11 +167,27 @@ Re-run Jobs använder den ursprungliga commit-SHA:n. Pusha alltid en ny commit f
 
 ---
 
+## Terraform remote state (GCS-backend)
+
+Terraform-state lagras i en delad GCS-bucket:
+
+```hcl
+backend "gcs" {
+  bucket = "chas-tf-state-sidestep-error"
+  prefix = "sentinel-upload"
+}
+```
+
+SA:n som används i CI (`GCP_SA_KEY`) måste ha `roles/storage.objectAdmin` på bucketen — annars misslyckas `terraform init` med `storage.objects.list denied`. Kontakta instruktören om behörighet saknas.
+
+---
+
 ## Felsökning
 
 | Fel | Trolig orsak | Lösning |
 |-----|-------------|---------|
-| `artifactregistry.repositories.uploadArtifacts denied` | SA saknar skrivrättigheter | Kontakta instruktör — be om `roles/artifactregistry.writer` |
+| `artifactregistry.repositories.uploadArtifacts denied` | SA saknar skrivrättigheter på Artifact Registry | Kontakta instruktör — be om `roles/artifactregistry.writer` |
+| `storage.objects.list denied` (terraform init) | SA saknar tillgång till GCS-bucket för remote state | Kontakta instruktör — be om `roles/storage.objectAdmin` på `chas-tf-state-sidestep-error` |
 | `decrypt: decryption failed` (cosign) | Specialtecken i `COSIGN_PASSWORD` | Generera om nyckelpar med alfanumeriskt lösenord |
 | `test: too many arguments` | Multiline secret expanderas inline i shell | Skicka secret via env var i steget |
 | `fetch first` vid git push | Remote har commits som saknas lokalt | `git pull origin BRANCH` sedan push |
