@@ -191,8 +191,8 @@ jobs:
     # Pinnad version för reproducerbarhet — undvik ubuntu-latest
     runs-on: ubuntu-24.04
     needs: [test-and-build, matrix-tests]
-    # Körs bara vid push till main — inte på PRs eller develop
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
 
     steps:
       - name: Checkout
@@ -231,6 +231,85 @@ jobs:
             europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:${{ github.sha }}
 
   # ─────────────────────────────────────────────────────────────
+  # TERRAFORM-GCP: Skapar långlivad infrastruktur i GCP-klustret
+  # Körs efter gcp-push och innan deploy-gcp.
+  #
+  # Vad hanteras här?
+  #   - kubernetes_service_account (sentinel-api-sa)
+  #   - kubernetes_secret          (sentinel-app-secrets)
+  #
+  # Varför Terraform och inte kubectl create?
+  #   - Deklarativt och idempotent — säkert att köra vid varje deploy
+  #   - Remote state i GCS-bucket säkerställer att teamet delar samma state
+  #   - Känsliga värden injiceras via TF_VAR_-miljövariabler från GitHub Secrets
+  #     och hamnar aldrig i klartext i loggar eller git
+  # ─────────────────────────────────────────────────────────────
+  terraform-gcp:
+    name: Terraform infrastruktur (GCP)
+    runs-on: ubuntu-24.04
+    needs: [gcp-push]
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
+
+    env:
+      # TF_VAR_-prefix gör att Terraform automatiskt plockar upp dessa
+      # som variabelvärden — ingen terraform.tfvars behövs i CI.
+      TF_VAR_kubeconfig_path: "$HOME/.kube/config"
+      TF_VAR_mongodb_uri: "mongodb+srv://${{ secrets.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@sentinel-scanner-api.gxlbfys.mongodb.net/sentinel_upload?appName=sentinel-scanner-api"
+      TF_VAR_threatfox_api_key: ${{ secrets.THREATFOX_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GCP_TF_SA_KEY är en separat SA med storage.objectAdmin på GCS-bucketen.
+      # Används för:
+      #   1. Autentisering mot GCS-bucketen (remote state)
+      #   2. Autentisering mot GCP-klustret via kubeconfig
+      # GCP_SA_KEY (student-registry-push) saknar bucket-access och används
+      # enbart för Artifact Registry-push i gcp-push-jobbet.
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_TF_SA_KEY }}
+
+      # Dekodas till ~/.kube/config — matchar TF_VAR_kubeconfig_path ovan
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_GCP_B64: ${{ secrets.KUBECONFIG_GCP_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_GCP_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      # Initierar Terraform med GCS-backend.
+      # Backend-konfigurationen ligger i main.tf (bucket + prefix).
+      # GCP-autentiseringen ovan ger tillgång till bucketen.
+      - name: Terraform init
+        run: terraform init
+        working-directory: infra/terraform/sentinel
+
+      # Visar planerade ändringar utan att applicera — syns i Actions-loggen
+      - name: Terraform plan
+        run: terraform plan
+        working-directory: infra/terraform/sentinel
+
+      # Skapar/uppdaterar SA och secrets i klustret.
+      # Idempotent — säkert att köra igen om inget ändrats.
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        working-directory: infra/terraform/sentinel
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f ~/.kube/config
+
+  # ─────────────────────────────────────────────────────────────
   # DEPLOY-GCP: Applicerar k8s/overlays/gcp/ på GCP-klustret
   # Körs efter gcp-push — imagen måste finnas i AR innan deploy.
   #
@@ -243,9 +322,10 @@ jobs:
   deploy-gcp:
     name: Deploy to GCP (sidestep-error)
     runs-on: ubuntu-24.04
-    # Väntar på gcp-push — imagen måste finnas i AR
-    needs: [gcp-push]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Väntar på terraform-gcp — SA och secrets måste finnas innan poden startar
+    needs: [terraform-gcp]
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
 
     steps:
       - name: Checkout
@@ -285,8 +365,14 @@ jobs:
 
       # Applicerar hela GCP-overlayern — namespace, SA, configmap, deployment m.m.
       # Idempotent: säkert att köra flera gånger utan bieffekter
+      #
+      # Varför kustomize build + kubectl apply och inte kubectl apply -k?
+      #   Kustomize v5 har en säkerhetsrestriktion (load restrictor) som blockerar
+      #   referenser till filer utanför overlay-mappen (t.ex. ../../base/configmap.yaml).
+      #   --load-restrictor LoadRestrictionsNone tillåter cross-directory references
+      #   vilket krävs för vårt overlay-mönster.
       - name: Apply GCP overlay
-        run: kubectl apply -k k8s/overlays/gcp/
+        run: kustomize build --load-restrictor LoadRestrictionsNone k8s/overlays/gcp/ | kubectl apply -f -
 
       # Väntar på att nya pods är Running och gamla är terminerade.
       # Misslyckas jobbet här rullar k8s automatiskt tillbaka till föregående revision.
