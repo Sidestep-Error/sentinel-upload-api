@@ -1,0 +1,13 @@
+# terraform.tfvars.example
+#
+# Kopiera till terraform.tfvars och fyll i riktiga värden.
+# OBS: terraform.tfvars är gitignorerad och ska ALDRIG committas.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+
+# Sökväg till din lokala kubeconfig för Hetzner-klustret.
+# Om du använder default-kontexten (~/.kube/config) kan du utelämna denna.
+kubeconfig_path = "~/.kube/config"
+
+# Namespacet där sentinel-upload-api kör på Hetzner
+namespace = "sentinel"
