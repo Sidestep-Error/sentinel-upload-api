@@ -73,11 +73,11 @@ kubectl get secret sentinel-app-secrets -n sidestep-error
 
 ## Ansvarsuppdelning — varför så här?
 
-| Lager | Verktyg | Anledning |
-|-------|---------|-----------|
-| Infrastruktur (SA, secrets) | Terraform | Deklarativt, versionerat, audit trail |
-| App-deployment | kubectl + Kustomize | Snabbare image-uppdateringar i CI, inget Terraform-state att låsa |
-| CI/CD-pipeline | GitHub Actions | Automatiserad leverans vid push till main |
+| Lager                       | Verktyg             | Anledning                                                         |
+|-----------------------------|---------------------|-------------------------------------------------------------------|
+| Infrastruktur (SA, secrets) | Terraform           | Deklarativt, versionerat, audit trail                             |
+| App-deployment              | kubectl + Kustomize | Snabbare image-uppdateringar i CI, inget Terraform-state att låsa |
+| CI/CD-pipeline              | GitHub Actions      | Automatiserad leverans vid push till main                         |
 
 Terraform är inte optimalt för att hantera image-taggar i CI — det kräver `terraform apply` vid varje deploy vilket är långsamt och kräver antingen lokal state eller Terraform Cloud. Kustomize + kubectl i CI är rätt verktyg för det jobbet.
 

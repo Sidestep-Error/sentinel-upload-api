@@ -6,12 +6,12 @@ Praktiska lärdomar och kommandon från Lab 1 och Lab 2. Avsett som referens fö
 
 ## GCP-miljö
 
-| Parameter | Värde |
-|-----------|-------|
-| GCP-projekt | `chas-devsecops-2026` |
-| Team/namespace | `sidestep-error` |
-| Artifact Registry | `europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/` |
-| Image-namnkonvention | `jonitsx-app` (studentprefix + appnamn) |
+| Parameter            | Värde                                                            |
+|----------------------|------------------------------------------------------------------|
+| GCP-projekt          | `chas-devsecops-2026`                                            |
+| Team/namespace       | `sidestep-error`                                                 |
+| Artifact Registry    | `europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/` |
+| Image-namnkonvention | `jonitsx-app` (studentprefix + appnamn)                          |
 
 ---
 
@@ -37,11 +37,11 @@ Om push misslyckas med permission-fel: kontakta instruktören och be om `roles/a
 
 ## GitHub Secrets
 
-| Secret | Innehåll | Notering |
-|--------|----------|----------|
-| `GCP_SA_KEY` | Service account JSON | Multiline — skicka alltid via env var, inte inline i shell |
-| `COSIGN_PRIVATE_KEY` | `cosign.key` base64-kodad | Se kodningskommando nedan |
-| `COSIGN_PASSWORD` | Lösenord till cosign-nyckeln | **Inga specialtecken** — orsakar `decryption failed` i CI |
+| Secret               | Innehåll                     | Notering                                                    |
+|----------------------|------------------------------|-------------------------------------------------------------|
+| `GCP_SA_KEY`         | Service account JSON         | Multiline — skicka alltid via env var, inte inline i shell  |
+| `COSIGN_PRIVATE_KEY` | `cosign.key` base64-kodad    | Se kodningskommando nedan                                   |
+| `COSIGN_PASSWORD`    | Lösenord till cosign-nyckeln | **Inga specialtecken** — orsakar `decryption failed` i CI   |
 
 ### Koda cosign.key för GitHub Secrets
 
@@ -184,11 +184,13 @@ SA:n som används i CI (`GCP_SA_KEY`) måste ha `roles/storage.objectAdmin` på 
 
 ## Felsökning
 
-| Fel | Trolig orsak | Lösning |
-|-----|-------------|---------|
-| `artifactregistry.repositories.uploadArtifacts denied` | SA saknar skrivrättigheter på Artifact Registry | Kontakta instruktör — be om `roles/artifactregistry.writer` |
-| `storage.objects.list denied` (terraform init) | SA saknar tillgång till GCS-bucket för remote state | Kontakta instruktör — be om `roles/storage.objectAdmin` på `chas-tf-state-sidestep-error` |
-| `decrypt: decryption failed` (cosign) | Specialtecken i `COSIGN_PASSWORD` | Generera om nyckelpar med alfanumeriskt lösenord |
-| `test: too many arguments` | Multiline secret expanderas inline i shell | Skicka secret via env var i steget |
-| `fetch first` vid git push | Remote har commits som saknas lokalt | `git pull origin BRANCH` sedan push |
-| Re-run ger samma fel efter workflow-fix | Re-run använder ursprunglig SHA | Pusha ny commit för att trigga ny körning |
+| Fel                                                              | Trolig orsak                                        | Lösning                                                                                               |
+|------------------------------------------------------------------|-----------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+| `artifactregistry.repositories.uploadArtifacts denied`           | SA saknar skrivrättigheter på Artifact Registry     | Kontakta instruktör — be om `roles/artifactregistry.writer`                                           |
+| `storage.objects.list denied` (terraform init)                   | SA saknar tillgång till GCS-bucket för remote state | Kontakta instruktör — be om `roles/storage.objectAdmin` på `chas-tf-state-sidestep-error`             |
+| `decrypt: decryption failed` (cosign)                            | Specialtecken i `COSIGN_PASSWORD`                   | Generera om nyckelpar med alfanumeriskt lösenord                                                      |
+| `test: too many arguments`                                       | Multiline secret expanderas inline i shell          | Skicka secret via env var i steget                                                                    |
+| `fetch first` vid git push                                       | Remote har commits som saknas lokalt                | `git pull origin BRANCH` sedan push                                                                   |
+| Re-run ger samma fel efter workflow-fix                          | Re-run använder ursprunglig SHA                     | Pusha ny commit för att trigga ny körning                                                             |
+| `i/o timeout` mot port `6443` (Hetzner deploy)                   | Brandväggen blockerar Kubernetes API-porten         | Servern använder `firewalld`: `firewall-cmd --permanent --add-port=6443/tcp && firewall-cmd --reload` |
+| `forbidden: cannot list resource "deployments"` (Hetzner deploy) | `list`/`watch` saknas i ci-deploy RBAC-rollen       | Kontrollera verbs i `infra/terraform/hetzner/main.tf`, kör `terraform apply` på servern               |

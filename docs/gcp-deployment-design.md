@@ -47,13 +47,13 @@ lägger på GCP-specifika ändringar ovanpå, utan att röra base-filerna.
 
 ### Vad overlayern ändrar
 
-| Vad | Hetzner (base) | GCP (overlay) | Anledning |
-|-----|---------------|---------------|-----------|
-| Namespace | `sentinel` | `sidestep-error` | Kursens namespace i GCP-klustret |
-| Image | `jonitsx/sentinel-upload-api` (Docker Hub) | GCP Artifact Registry | Kortare pull-väg, autentisering via GCP SA |
-| ServiceAccount | default | `sentinel-api-sa` | OPA-policy `no-default-sa` i klustret |
-| ClusterIssuer | Inkluderad (cert-manager) | **Exkluderad** | Hetzner-specifik, finns inte på GCP |
-| Ingress | nginx + Let's Encrypt | **Ej konfigurerat än** | GCP-klustrets ingress-setup okänd |
+| Vad            | Hetzner (base)                             | GCP (overlay)          | Anledning                                  |
+|----------------|--------------------------------------------|------------------------|--------------------------------------------|
+| Namespace      | `sentinel`                                 | `sidestep-error`       | Kursens namespace i GCP-klustret           |
+| Image          | `jonitsx/sentinel-upload-api` (Docker Hub) | GCP Artifact Registry  | Kortare pull-väg, autentisering via GCP SA |
+| ServiceAccount | default                                    | `sentinel-api-sa`      | OPA-policy `no-default-sa` i klustret      |
+| ClusterIssuer  | Inkluderad (cert-manager)                  | **Exkluderad**         | Hetzner-specifik, finns inte på GCP        |
+| Ingress        | nginx + Let's Encrypt                      | **Ej konfigurerat än** | GCP-klustrets ingress-setup okänd          |
 
 ### Varför inte duplicera filerna?
 
@@ -138,24 +138,24 @@ filen raderas alltid i ett `if: always()`-steg för att inte läcka credentials.
 GCP-klustret har ett antal förinstallerade policies. Vi har adresserat
 dessa i overlayern:
 
-| Policy | Hur vi möter den |
-|--------|-----------------|
-| `no-default-sa` | Dedikerad `sentinel-api-sa` ServiceAccount i overlay |
-| `no-latest-tag` | Image taggas med `github.sha` i CI, aldrig `:latest` |
-| `require-non-root` | `runAsNonRoot: true`, `runAsUser: 10001` — ärvs från base |
-| `require-resource-limits` | CPU/memory limits — ärvs från base |
+| Policy                    | Hur vi möter den                                                  |
+|---------------------------|-------------------------------------------------------------------|
+| `no-default-sa`           | Dedikerad `sentinel-api-sa` ServiceAccount i overlay              |
+| `no-latest-tag`           | Image taggas med `github.sha` i CI, aldrig `:latest`              |
+| `require-non-root`        | `runAsNonRoot: true`, `runAsUser: 10001` — ärvs från base         |
+| `require-resource-limits` | CPU/memory limits — ärvs från base                                |
 | `require-readonly-rootfs` | `readOnlyRootFilesystem: true` + `/tmp` emptyDir — ärvs från base |
-| `require-labels` | `app.kubernetes.io/name` och `part-of` — ärvs från base |
+| `require-labels`          | `app.kubernetes.io/name` och `part-of` — ärvs från base           |
 
 ---
 
 ## Koppling till NIST CSF
 
-| NIST-funktion | Vad detta steg bidrar med |
-|--------------|--------------------------|
-| **PROTECT** | Image från GCP AR (kortare leveranskedja), OPA-policies enforced, secrets ur git |
-| **DETECT** | Deployment med SHA-tag → tydlig audit trail om incident inträffar |
-| **RESPOND** | Runbook finns i `docs/gcp-deployment-runbook.md` för att kunna agera snabbt |
+| NIST-funktion | Vad detta steg bidrar med                                                        |
+|---------------|----------------------------------------------------------------------------------|
+| **PROTECT**   | Image från GCP AR (kortare leveranskedja), OPA-policies enforced, secrets ur git |
+| **DETECT**    | Deployment med SHA-tag → tydlig audit trail om incident inträffar                |
+| **RESPOND**   | Runbook finns i `docs/gcp-deployment-runbook.md` för att kunna agera snabbt      |
 
 ---
 
