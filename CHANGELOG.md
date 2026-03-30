@@ -1,5 +1,55 @@
 # CHANGELOG
 
+## 2026-03-30
+
+### CI/CD — Automatisk deploy till Hetzner (least privilege)
+
+- Lade till `deploy-hetzner`-jobb i CI-pipelinen som triggar automatiskt vid push till `main` efter att Docker Hub-imagen är pushad.
+- Jobbet kör `kubectl rollout restart deployment/sentinel-upload-api -n sentinel` och väntar på att rollout är klar (`--timeout=120s`).
+- Kubeconfigen raderas alltid från CI-runnern efter deploy (`if: always()`), oavsett utfall.
+- GitHub Secret som krävs: `KUBECONFIG_HETZNER_B64` (base64-kodad kubeconfig för CI-SA:n).
+
+### Infrastruktur — Terraform för Hetzner RBAC (least privilege)
+
+- Lade till Terraform-kod i `infra/terraform/hetzner/` som skapar en dedikerad `ci-deploy` ServiceAccount med minimal RBAC i `sentinel`-namespacet.
+- ServiceAccount får bara `get`, `patch`, `update` på `deployments` — ingen annan åtkomst till klustret.
+- En långlivad token-Secret skapas automatiskt (`kubernetes.io/service-account-token`) för Kubernetes 1.24+.
+- En läckt CI-token kan bara trigga en omstart, inte läsa secrets, skapa pods eller påverka andra namespaces.
+- Token roteras enkelt: `kubectl delete secret ci-deploy-token -n sentinel` + `terraform apply`.
+
+### Infrastruktur — GCP-jobb inaktiverade
+
+- `gcp-push`, `terraform-gcp` och `deploy-gcp`-jobben i CI är inaktiverade (`if: false`) efter att GCP-miljön avvecklades.
+- Koden behålls för referens men körs inte.
+
+### Docker — Dockerfile-fixar
+
+- Tog bort dubbletter av `HEALTHCHECK` och `CMD` som uppstod vid en felaktig merge-lösning.
+- Lade till `COPY --chown=appuser:appuser assets/ ./assets/` så att GeoIP MaxMind-databasen inkluderas i Docker-imagen.
+- Utan denna fix visades inga röda punkter på threat map i produktionsmiljön.
+
+### Tester — Snabbare CI-körningar
+
+- Lade till mock av fyra startup-funktioner i `tests/conftest.py` för att förhindra att CI-tester tog upp till 20 minuter:
+  - `run_threat_intel_update_job` — körde threat intel-insamling direkt vid start
+  - `BackgroundScheduler` — schemalade jobb var 15:e minut
+  - `setup_database_indexes` — försökte ansluta till MongoDB (ej tillgänglig i CI)
+  - `ensure_upload_indexes` — asynkron MongoDB-index-setup
+- CI-tester körs nu på normal tid utan externa beroenden.
+
+### UI — Encoding-fix
+
+- Fixade korrupt teckenkodning i `app/static/index.html`: `Waiting for inputâ€¦` → `Waiting for input…`.
+- Felet berodde på att UTF-8-tecknet `…` (ellipsis, U+2026) sparades med fel encoding vid en merge.
+
+### CI — Kommentarer och dokumentation i pipeline
+
+- Lade till detaljerade kommentarer i `test-and-build`- och `matrix-tests`-jobben i `.github/workflows/ci.yml` för att förtydliga syfte och konfigurationsval.
+
+### Dokumentation
+
+- Lade till `docs/hetzner-deploy-runbook.md` med fullständig dokumentation av least-privilege Hetzner CI/CD-setup: bakgrund, Terraform-resurser, kubeconfig-generering och felsökning.
+
 ## 2026-02-25
 
 - Produced hardened `docker-compose.yml` for Hetzner production deployment replacing the development-oriented compose configuration.
