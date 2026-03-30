@@ -78,7 +78,7 @@ resource "kubernetes_secret" "ci_deploy_token" {
 # Minimal RBAC-roll — bara exakt det som krävs för "kubectl rollout restart"
 # följt av "kubectl rollout status".
 #
-# Varför dessa verb?
+# Varför detta?
 #   "kubectl rollout restart" patchar deployment:ens pod-template med en
 #   restart-annotation (kubectl.kubernetes.io/restartedAt).
 #   k8s kräver get innan patch.
