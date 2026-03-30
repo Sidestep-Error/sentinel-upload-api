@@ -26,12 +26,12 @@ trigga en omstart — ingenting annat.
 
 Terraform-koden i `infra/terraform/hetzner/` skapar:
 
-| Resurs | Namn | Syfte |
-|--------|------|-------|
-| ServiceAccount | `ci-deploy` | Identitet för CI/CD |
-| Secret | `ci-deploy-token` | Långlivad SA-token (k8s 1.24+) |
-| Role | `ci-deploy-role` | Tillåter `get/patch/update` på deployments |
-| RoleBinding | `ci-deploy-binding` | Binder rollen till SA:n |
+| Resurs         | Namn                | Syfte                                                 |
+|----------------|---------------------|-------------------------------------------------------|
+| ServiceAccount | `ci-deploy`         | Identitet för CI/CD                                   |
+| Secret         | `ci-deploy-token`   | Långlivad SA-token (k8s 1.24+)                        |
+| Role           | `ci-deploy-role`    | Tillåter `get/list/watch/patch/update` på deployments |
+| RoleBinding    | `ci-deploy-binding` | Binder rollen till SA:n                               |
 
 ### Köra Terraform
 
@@ -111,7 +111,7 @@ vid push till `main`. Det:
 ## Säkerhetsöverväganden
 
 - SA-tokenen har **ingen** tillgång utanför `sentinel`-namespacet
-- Tokenen kan bara patcha deployments — inte läsa secrets, skapa pods etc.
+- Tokenen kan bara lista, bevaka och patcha deployments — inte läsa secrets, skapa pods etc.
 - Kubeconfigen raderas alltid från CI-runnern efter deploy
 - Om `KUBECONFIG_HETZNER_B64` läcker: rotera token med `kubectl delete secret ci-deploy-token -n sentinel` och kör `terraform apply` igen
 
@@ -119,9 +119,11 @@ vid push till `main`. Det:
 
 ## Felsökning
 
-| Fel | Trolig orsak | Lösning |
-|-----|-------------|---------|
-| `Unauthorized` | Token ogiltig eller saknas | Kontrollera att `KUBECONFIG_HETZNER_B64` är korrekt base64-kodad |
-| `forbidden: User cannot patch deployments` | RBAC saknas | Kör `terraform apply` på nytt |
-| `connection refused` | Server-IP felaktig i kubeconfig | Uppdatera kubeconfigen med rätt publik IP |
-| `deployment not found` | Fel namespace | Kontrollera att namespace är `sentinel` |
+| Fel                                             | Trolig orsak                                | Lösning                                                                                                      |
+|-------------------------------------------------|---------------------------------------------|--------------------------------------------------------------------------------------------------------------|
+| `Unauthorized`                                  | Token ogiltig eller saknas                  | Kontrollera att `KUBECONFIG_HETZNER_B64` är korrekt base64-kodad                                             |
+| `forbidden: User cannot patch deployments`      | RBAC saknas                                 | Kör `terraform apply` på nytt                                                                                |
+| `forbidden: cannot list resource "deployments"` | `list`/`watch` saknas i rollen              | Kontrollera att `main.tf` har `list` och `watch` i verbs, kör `terraform apply`                              |
+| `i/o timeout` vid anslutning till port `6443`   | Brandväggen blockerar Kubernetes API-porten | Öppna port `6443/tcp` i `firewalld`: `firewall-cmd --permanent --add-port=6443/tcp && firewall-cmd --reload` |
+| `connection refused`                            | Server-IP felaktig i kubeconfig             | Uppdatera kubeconfigen med rätt publik IP                                                                    |
+| `deployment not found`                          | Fel namespace                               | Kontrollera att namespace är `sentinel`                                                                      |
