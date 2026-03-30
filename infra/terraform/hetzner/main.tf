@@ -75,12 +75,16 @@ resource "kubernetes_secret" "ci_deploy_token" {
 }
 
 # ─── Role ─────────────────────────────────────────────────────────────────────
-# Minimal RBAC-roll — bara exakt det som krävs för "kubectl rollout restart".
+# Minimal RBAC-roll — bara exakt det som krävs för "kubectl rollout restart"
+# följt av "kubectl rollout status".
 #
-# Varför get + patch + update på deployments?
+# Varför dessa verb?
 #   "kubectl rollout restart" patchar deployment:ens pod-template med en
 #   restart-annotation (kubectl.kubernetes.io/restartedAt).
-#   k8s kräver att man kan läsa (get) resursen innan man patchar den.
+#   k8s kräver get innan patch.
+#
+#   "kubectl rollout status" behöver list + watch för att kunna bevaka
+#   deploymentens framsteg tills rollout är klar.
 resource "kubernetes_role" "ci_deploy_role" {
   metadata {
     name      = "ci-deploy-role"
@@ -94,7 +98,7 @@ resource "kubernetes_role" "ci_deploy_role" {
   rule {
     api_groups = ["apps"]
     resources  = ["deployments"]
-    verbs      = ["get", "patch", "update"]
+    verbs      = ["get", "list", "watch", "patch", "update"]
   }
 }
 

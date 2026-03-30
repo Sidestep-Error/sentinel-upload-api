@@ -34,7 +34,16 @@ CI pipeline
 - Runs matrix tests on Python `3.11` and `3.12`.
 - Builds Docker image, runs Trivy scan (fail on fixable HIGH/CRITICAL), and generates SBOM (Syft artifact).
 - Pushes Docker image to Docker Hub on `main` pushes after all checks pass.
+- Automatically deploys to Hetzner (k3s) on `main` pushes via `kubectl rollout restart` using a least-privilege ServiceAccount (`ci-deploy`).
 - Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `sidesteperror/sentinel-upload-api`).
+- Hetzner deploy secret required in GitHub: `KUBECONFIG_HETZNER_B64` (base64-encoded kubeconfig for the `ci-deploy` ServiceAccount).
+
+Hetzner — CI/CD least privilege
+
+- The `ci-deploy` ServiceAccount is provisioned by Terraform in `infra/terraform/hetzner/`.
+- The ServiceAccount can only `get`, `patch`, `update` on `deployments` in the `sentinel` namespace — no cluster-wide access.
+- A leaked CI token can at most trigger a rollout restart; it cannot read secrets, create pods, or affect other namespaces.
+- See `docs/hetzner-deploy-runbook.md` for setup steps and kubeconfig generation instructions.
 
 CI troubleshooting (new run vs re-run)
 
