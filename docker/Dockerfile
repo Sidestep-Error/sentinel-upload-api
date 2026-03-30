@@ -42,6 +42,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Kopiera applikationskod (utan tests, dev-config etc.)
 COPY --chown=appuser:appuser app/ ./app/
+COPY --chown=appuser:appuser assets/ ./assets/
 
 # Skapa tmp-mapp som appuser kan skriva till
 # (docker-compose mountar tmpfs hit, men bra att ha som fallback)
