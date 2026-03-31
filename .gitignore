@@ -26,5 +26,21 @@ build/
 Credentials/
 *.firebase-adminsdk-*.json
 *service-account*.json
-k8s/base/secret.yaml
+
 GeoLite2-City.mmdb
+assets/GeoLite2-City*.tar.gz
+
+# Kubernetes secrets
+k8s/base/secret.yaml
+k8s/overlays/gcp/secret.yaml
+*kubeconfig*.yaml
+*-kubeconfig.yaml
+
+# Terraform sensitive files
+**/*.tfstate
+**/*.tfstate.backup
+**/.terraform/
+**/*.tfvars
+**/terraform.tfvars.json
+**/.terraform.lock.hcl
+

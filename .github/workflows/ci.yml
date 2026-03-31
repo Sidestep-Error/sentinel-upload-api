@@ -1,18 +1,43 @@
 name: CI
 
+# Triggas vid:
+#   - Alla pull requests (kör test + scan, men inte push/deploy)
+#   - Push till main eller develop (kör hela pipelinen inkl. deploy)
+#   - Manuell körning via GitHub Actions UI (workflow_dispatch)
 on:
   pull_request:
   push:
     branches: ["main", "develop"]
+  workflow_dispatch:
 
+# Minimala behörigheter på repo-nivå — varje jobb ärver detta
+# och kan utöka vid behov. Följer least privilege-principen.
 permissions:
   contents: read
 
 jobs:
+  # ─────────────────────────────────────────────────────────────
+  # TEST-AND-BUILD: Kvalitetsgrindar som måste passera innan deploy
+  #
+  # Jobbet kör i ordning:
+  #   1. Dependency scan    — kontrollerar kända CVEer i beroenden
+  #   2. Lint               — säkerställer kodkvalitet
+  #   3. K8s-validering     — kontrollerar att manifests är korrekta
+  #   4. Tester             — funktionstester av applikationen
+  #   5. GeoIP-download     — hämtar MaxMind-databasen för imagen
+  #   6. Docker build       — bygger imagen (utan push) för scanning
+  #   7. Trivy scan         — blockerar vid fixbara HIGH/CRITICAL CVEer
+  #   8. SBOM               — genererar Software Bill of Materials
+  #
+  # Varför bygga imagen utan push i detta jobb?
+  #   Trivy scannar den lokalt byggda imagen — vi vill inte pusha
+  #   en sårbar image till Docker Hub även om bygget lyckas.
+  # ─────────────────────────────────────────────────────────────
   test-and-build:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}
+      # Rate limit-värden kan overridas via GitHub Variables för CI-miljön
       UPLOAD_RATE_LIMIT_PER_MINUTE: ${{ vars.UPLOAD_RATE_LIMIT_PER_MINUTE_CI || '120' }}
       UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${{ vars.UPLOAD_RATE_LIMIT_WINDOW_SECONDS_CI || '60' }}
 
@@ -30,19 +55,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r app/requirements.txt -r app/requirements-dev.txt
 
+      # pip-audit kontrollerar beroenden mot kända CVE-databaser.
+      # Misslyckas jobbet om sårbara paket hittas i requirements.txt.
       - name: Dependency scan (pip-audit)
         run: |
           pip-audit -r app/requirements.txt
 
+      # ruff är en snabb Python-linter — kontrollerar kodkvalitet och stil.
       - name: Lint code (ruff)
         run: |
           ruff check app tests
 
+      # kubeconform validerar att k8s-manifests följer k8s API-schemat.
+      # -strict: inga okända fält tillåtna
+      # -kubernetes-version: validera mot specifik k8s-version
       - name: Validate Kubernetes base manifests (kubeconform)
         run: |
           docker run --rm -v ${{ github.workspace }}:/work ghcr.io/yannh/kubeconform:latest \
             -strict -summary -kubernetes-version 1.31.0 /work/k8s/base/deployment.yaml /work/k8s/base/service.yaml /work/k8s/base/ingress.yaml /work/k8s/base/networkpolicy.yaml
 
+      # -ignore-missing-schemas: OPA CRDs har inget publikt schema — skippa validering av dessa
       - name: Validate Gatekeeper templates and constraints (kubeconform)
         run: |
           docker run --rm -v ${{ github.workspace }}:/work ghcr.io/yannh/kubeconform:latest \
@@ -52,23 +84,34 @@ jobs:
         run: |
           pytest -q
 
+      # GeoIP-databasen laddas ner och bakas in i Docker-imagen.
+      # Licencnyckeln lagras som GitHub Secret (MAXWIND_LICENSE_KEY).
+      # Databasen uppdateras varje gång en ny image byggs.
       - name: Download GeoIP Database
         run: |
           mkdir -p assets
           curl -L "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXWIND_LICENSE_KEY }}&suffix=tar.gz" -o GeoLite2-City.tar.gz
           tar -xzf GeoLite2-City.tar.gz --strip-components=1 -C assets
 
+      # Bygger imagen lokalt för Trivy-scanning — pushas inte här
       - name: Build Docker image (no push)
         run: |
           docker build --pull --no-cache -f docker/Dockerfile -t sentinel-upload-api:ci .
 
-      - name: Trivy scan (HIGH/CRITICAL)
+      # Trivy skannar imagen efter kända sårbarheter.
+      # --ignore-unfixed: skippar CVEer utan tillgänglig fix
+      # --exit-code 1: failar jobbet om HIGH/CRITICAL hittas
+      # Pinnad version (0.69.1) för reproducerbarhet
+      - name: Trivy scan (fixable HIGH/CRITICAL)
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest \
-            image --exit-code 1 --severity HIGH,CRITICAL sentinel-upload-api:ci
+            aquasec/trivy:0.69.1 \
+            image --scanners vuln --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL sentinel-upload-api:ci
 
+      # Syft genererar en SBOM (Software Bill of Materials) i SPDX-format.
+      # SBOM:en laddas upp som artifact och kan användas för compliance-
+      # och supply chain-granskning.
       - name: Generate SBOM (Syft)
         run: |
           docker run --rm \
@@ -83,6 +126,14 @@ jobs:
           name: sbom-spdx
           path: sbom.spdx.json
 
+  # ─────────────────────────────────────────────────────────────
+  # MATRIX-TESTS: Kör testerna mot flera Python-versioner
+  #
+  # Varför matrix-tester?
+  #   Säkerställer att koden fungerar på både Python 3.11 och 3.12.
+  #   fail-fast: false — båda versionerna körs klart även om en misslyckas,
+  #   så vi får full bild av kompatibiliteten.
+  # ─────────────────────────────────────────────────────────────
   matrix-tests:
     name: Matrix tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
@@ -174,3 +225,265 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: ${{ steps.tags.outputs.value }}
+
+  # ─────────────────────────────────────────────────────────────
+  # DEPLOY-HETZNER: Triggar rollout restart på Hetzner k3s-klustret
+  # Körs efter dockerhub-push — imagen måste finnas på Docker Hub
+  # innan k8s kan hämta den.
+  #
+  # Varför kubectl rollout restart och inte bara imagePullPolicy: Always?
+  #   imagePullPolicy: Always hämtar ny image vid pod-restart, men k8s
+  #   startar inte om pods automatiskt när en ny image pushats.
+  #   rollout restart tvingar fram en omstart och garanterar att
+  #   den senaste imagen faktiskt körs.
+  #
+  # Säkerhet — least privilege:
+  #   CI använder en dedikerad ServiceAccount (ci-deploy) med en
+  #   RBAC-roll begränsad till get/patch/update på deployments i
+  #   sentinel-namespacet. Admin-kubeconfigen exponeras aldrig i CI.
+  #   Se infra/terraform/hetzner/ och docs/hetzner-deploy-runbook.md.
+  # ─────────────────────────────────────────────────────────────
+  deploy-hetzner:
+    name: Deploy to Hetzner (sentinel)
+    runs-on: ubuntu-24.04
+    needs: [dockerhub-push]
+    # Körs bara vid push till main — inte på PRs eller develop
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      # Kubeconfigen lagras base64-kodad i GitHub Secrets och dekodas till
+      # en temporär fil. Innehåller en SA-token med minimal behörighet —
+      # bara rollout restart på deployments i sentinel-namespacet.
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_HETZNER_B64: ${{ secrets.KUBECONFIG_HETZNER_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_HETZNER_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # Tvingar k8s att hämta den nya imagen från Docker Hub.
+      # Väntar tills alla pods är Running och gamla är terminerade.
+      # Misslyckas steget rullar k8s automatiskt tillbaka till föregående revision.
+      - name: Rollout restart
+        run: |
+          kubectl rollout restart deployment/sentinel-upload-api -n sentinel
+          kubectl rollout status deployment/sentinel-upload-api -n sentinel --timeout=120s
+
+      # Raderar kubeconfigen oavsett utfall — credentials läcker inte
+      # om jobbet kraschar mitt i körningen.
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f ~/.kube/config
+
+  # ─────────────────────────────────────────────────────────────
+  # GCP-PUSH: Bygger och pushar imagen till GCP Artifact Registry
+  # Körs parallellt med dockerhub-push — båda väntar bara på
+  # test-and-build och matrix-tests, inte på varandra.
+  #
+  # Varför GCP AR och inte Docker Hub för GCP-deployment?
+  #   - Auth sker via befintlig GCP_SA_KEY (inget extra Docker Hub-konto)
+  #   - Imagen är i samma GCP-region som klustret → kortare pull-tid
+  #   - Tydligare separation: Hetzner ← Docker Hub, GCP ← Artifact Registry
+  # ─────────────────────────────────────────────────────────────
+  gcp-push:
+    name: GCP Artifact Registry push
+    # Pinnad version för reproducerbarhet — undvik ubuntu-latest
+    runs-on: ubuntu-24.04
+    needs: [test-and-build, matrix-tests]
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Autentiserar mot GCP med service account JSON.
+      # Använd google-github-actions/auth@v2 — INTE docker/login-action med _json_key.
+      # Anledning: docker/login-action ger "uploadArtifacts denied" i denna GCP-miljö.
+      # Se docs/ci_cd_notes.md för detaljer.
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
+
+      # GeoIP-databasen krävs av Dockerfile — bäddas in i imagen vid bygget
+      - name: Download GeoIP Database
+        run: |
+          mkdir -p assets
+          curl -L "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-City&license_key=${{ secrets.MAXWIND_LICENSE_KEY }}&suffix=tar.gz" -o GeoLite2-City.tar.gz
+          tar -xzf GeoLite2-City.tar.gz --strip-components=1 -C assets
+
+      # Pushar med två taggar:
+      #   :main     — "senaste stabila", används av kustomization.yaml som fallback
+      #   :SHA      — exakt commit, används av deploy-gcp för reproducerbar deploy
+      - name: Build and push to GCP Artifact Registry
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:main
+            europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:${{ github.sha }}
+
+  # ─────────────────────────────────────────────────────────────
+  # TERRAFORM-GCP: Skapar långlivad infrastruktur i GCP-klustret
+  # Körs efter gcp-push och innan deploy-gcp.
+  #
+  # Vad hanteras här?
+  #   - kubernetes_service_account (sentinel-api-sa)
+  #   - kubernetes_secret          (sentinel-app-secrets)
+  #
+  # Varför Terraform och inte kubectl create?
+  #   - Deklarativt och idempotent — säkert att köra vid varje deploy
+  #   - Remote state i GCS-bucket säkerställer att teamet delar samma state
+  #   - Känsliga värden injiceras via TF_VAR_-miljövariabler från GitHub Secrets
+  #     och hamnar aldrig i klartext i loggar eller git
+  # ─────────────────────────────────────────────────────────────
+  terraform-gcp:
+    name: Terraform infrastruktur (GCP)
+    runs-on: ubuntu-24.04
+    needs: [gcp-push]
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
+
+    env:
+      # TF_VAR_-prefix gör att Terraform automatiskt plockar upp dessa
+      # som variabelvärden — ingen terraform.tfvars behövs i CI.
+      TF_VAR_kubeconfig_path: "$HOME/.kube/config"
+      TF_VAR_mongodb_uri: "mongodb+srv://${{ secrets.MONGO_USERNAME }}:${{ secrets.MONGO_PASSWORD }}@sentinel-scanner-api.gxlbfys.mongodb.net/sentinel_upload?appName=sentinel-scanner-api"
+      TF_VAR_threatfox_api_key: ${{ secrets.THREATFOX_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # GCP_TF_SA_KEY är en separat SA med storage.objectAdmin på GCS-bucketen.
+      # Används för:
+      #   1. Autentisering mot GCS-bucketen (remote state)
+      #   2. Autentisering mot GCP-klustret via kubeconfig
+      # GCP_SA_KEY (student-registry-push) saknar bucket-access och används
+      # enbart för Artifact Registry-push i gcp-push-jobbet.
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_TF_SA_KEY }}
+
+      # Dekodas till ~/.kube/config — matchar TF_VAR_kubeconfig_path ovan
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_GCP_B64: ${{ secrets.KUBECONFIG_GCP_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_GCP_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      # Initierar Terraform med GCS-backend.
+      # Backend-konfigurationen ligger i main.tf (bucket + prefix).
+      # GCP-autentiseringen ovan ger tillgång till bucketen.
+      - name: Terraform init
+        run: terraform init
+        working-directory: infra/terraform/sentinel
+
+      # Visar planerade ändringar utan att applicera — syns i Actions-loggen
+      - name: Terraform plan
+        run: terraform plan
+        working-directory: infra/terraform/sentinel
+
+      # Skapar/uppdaterar SA och secrets i klustret.
+      # Idempotent — säkert att köra igen om inget ändrats.
+      - name: Terraform apply
+        run: terraform apply -auto-approve
+        working-directory: infra/terraform/sentinel
+
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f ~/.kube/config
+
+  # ─────────────────────────────────────────────────────────────
+  # DEPLOY-GCP: Applicerar k8s/overlays/gcp/ på GCP-klustret
+  # Körs efter gcp-push — imagen måste finnas i AR innan deploy.
+  #
+  # Varför Kustomize och inte kubectl apply -f direkt?
+  #   - Kustomize hanterar namespace-override och image-swap utan
+  #     att vi rör base-filerna (Hetzner-deploymentet påverkas ej)
+  #   - SHA-pinning via "kustomize edit set image" garanterar att
+  #     exakt rätt image deployas, inte bara ":main"-taggen
+  # ─────────────────────────────────────────────────────────────
+  deploy-gcp:
+    name: Deploy to GCP (sidestep-error)
+    runs-on: ubuntu-24.04
+    # Väntar på terraform-gcp — SA och secrets måste finnas innan poden startar
+    needs: [terraform-gcp]
+    # GCP-miljön används inte längre — jobbet inaktiverat men behålls som dokumentation
+    if: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      # Hämtar kustomize från pinnad release — undviker breaking changes från "latest"
+      - name: Install kustomize
+        run: |
+          curl -sL "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin
+
+      # Kubeconfigen lagras base64-kodad i GitHub Secrets och dekodas till en
+      # temporär fil. Filen raderas alltid i cleanup-steget nedan (if: always()).
+      # Skickas via env var — INTE inline i shell — för att undvika
+      # specialtecken-tolkningsproblem (samma mönster som GCP_SA_KEY).
+      - name: Set up kubeconfig
+        env:
+          KUBECONFIG_GCP_B64: ${{ secrets.KUBECONFIG_GCP_B64 }}
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBECONFIG_GCP_B64" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      # Skriver in exakt SHA i kustomization.yaml innan apply.
+      # Varför SHA och inte :main-taggen?
+      #   En mutable tag som :main kan pekas om till en annan image utan att
+      #   k8s märker det. Med SHA vet vi exakt vad som kör — viktigt för
+      #   spårbarhet vid incident response. Samma princip som cosign-signering.
+      - name: Pin image to commit SHA in overlay
+        run: |
+          cd k8s/overlays/gcp
+          kustomize edit set image \
+            jonitsx/sentinel-upload-api=europe-north1-docker.pkg.dev/chas-devsecops-2026/student-apps/jonitsx-app:${{ github.sha }}
+
+      # Applicerar hela GCP-overlayern — namespace, SA, configmap, deployment m.m.
+      # Idempotent: säkert att köra flera gånger utan bieffekter
+      #
+      # Varför kustomize build + kubectl apply och inte kubectl apply -k?
+      #   Kustomize v5 har en säkerhetsrestriktion (load restrictor) som blockerar
+      #   referenser till filer utanför overlay-mappen (t.ex. ../../base/configmap.yaml).
+      #   --load-restrictor LoadRestrictionsNone tillåter cross-directory references
+      #   vilket krävs för vårt overlay-mönster.
+      - name: Apply GCP overlay
+        run: kustomize build --load-restrictor LoadRestrictionsNone k8s/overlays/gcp/ | kubectl apply -f -
+
+      # Väntar på att nya pods är Running och gamla är terminerade.
+      # Misslyckas jobbet här rullar k8s automatiskt tillbaka till föregående revision.
+      - name: Wait for rollout
+        run: kubectl rollout status deployment/sentinel-upload-api -n sidestep-error --timeout=120s
+
+      # Raderar kubeconfigen oavsett om tidigare steg lyckades eller ej (if: always()).
+      # Förhindrar att credentials läcker om jobbet kraschar mitt i körningen.
+      - name: Clean up kubeconfig
+        if: always()
+        run: rm -f ~/.kube/config

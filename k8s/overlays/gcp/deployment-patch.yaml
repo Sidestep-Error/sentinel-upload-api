@@ -1,0 +1,23 @@
+# deployment-patch.yaml — GCP-overlay (Strategic Merge Patch)
+#
+# En Kustomize Strategic Merge Patch slår ihop detta dokument med
+# base/deployment.yaml. Endast fält som anges här skrivs över —
+# resten ärvs oförändrat från base.
+#
+# Vad patchen gör:
+#   Sätter serviceAccountName på pod-spec:en så att pods i GCP-klustret
+#   kör under sentinel-api-sa istället för default ServiceAccount.
+#
+# Varför behövs detta inte i Hetzner-deploymenten?
+#   Hetzner-klustret (k3s) saknar OPA-policyn no-default-sa, så default
+#   ServiceAccount fungerar utan problem där. Base-manifestet rör vi inte.
+#
+# Kedjan: Terraform skapar SA → den här patchen refererar SA → OPA nöjd
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sentinel-upload-api
+spec:
+  template:
+    spec:
+      serviceAccountName: sentinel-api-sa

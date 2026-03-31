@@ -1,0 +1,14 @@
+# namespace.yaml — GCP-overlay
+#
+# Definierar namespacet för GCP-klustret (sidestep-error).
+# Namespacet ägs och hanteras av instruktören — den här filen
+# ser till att kubectl apply -k är idempotent även om resursen redan finns.
+#
+# Notera: base/namespace.yaml definierar "sentinel" (Hetzner).
+# Vi inkluderar denna fil istället för base-versionen i kustomization.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sidestep-error
+  labels:
+    app.kubernetes.io/part-of: sentinel-platform
