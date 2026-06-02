@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-05-26
+
+### Docker Compose — fixar efter develop → hotfix/upload-requestheaders-fix merge
+
+- **Fix: variabelnamn-mismatch mellan `.env` och `docker-compose.yml`.** Tidigare merge bytte namn på två mongodb-credentials utan att flagga ändringen för teamet. Lokala `.env`-filer från före bytet pekade fortfarande på de gamla namnen → mongodb-containern startade med tomma credentials och kraschade vid auth-init, vilket i sin tur tog ner `sentinel_api` (`depends_on: service_healthy`).
+  - Gamla namn (i `.env`): `MONGO_ROOT_USERNAME`, `MONGO_ROOT_PASSWORD`
+  - Nya namn (förväntade av `docker-compose.yml` och `.env.local.example`): `MONGO_USERNAME`, `MONGO_PASSWORD`
+  - Åtgärd för utvecklare med gammal `.env`: byt namn på de två raderna lokalt. Värdena behålls.
+- **Fix: korrupt `expose:`-block i `docker-compose.yml`.** Senaste merge:n lämnade env-variabler felaktigt inklistrade i `expose:`-blocket på `api`-servicen. Docker tolkade `MONGODB_URI=mongodb+srv:...` som en port-spec och kraschade med `invalid start port`. Env-vars är nu flyttade till `environment:`-blocket där de hör hemma; `expose:` innehåller bara port `8000`.
+- **Fix: default-image pekade på fel Docker Hub-repo.** `image: ${DOCKER_IMAGE:-sidesteperror/sentinel-upload-api}` ändrad till `jonitsx/sentinel-upload-api` (det verkliga repot). Samma exempelvärde uppdaterat i README.md.
+- **CI: `:latest`-tag pushas nu vid push till `main`.** Tidigare pushades bara `:main`, `:develop` och `:<sha>` — inte `:latest`. Detta gjorde att `docker compose pull` (med compose default `:latest`) failade med "pull access denied" trots att repot var publikt. Main-builds taggas nu med `:latest`, `:main` och `:<sha>`. Develop-builds är oförändrade (`:develop` + `:<sha>`) för att inte ersätta `:latest` med dev-state.
+- **UI: easter egg refererar nu generiska bildnamn.** `joline.png` och `jon.png` raderade. `viktor.png`, `stoffe.png`, `albin.png` omdöpta till `hacker-grey.png`, `hacker-purple.png`, `hacker-blue.png` via `git mv` (historik bevarad). Nya `female-hacker.png` och `hacker.png` tillagda. `app/static/index.html` uppdaterad med de nya filnamnen i `team-photos`-blocket. Motivering: personnamn behöver inte ligga exponerade i public URL:er på render-deployen.
+- **`.gitignore`: utökad med lokala undantag.** `/guides/`, `/infra/terraform/gke-namespace/` samt fem markdown-rapporter i `/docs/` (individuella reflektioner och gruppmaterial) är nu git-ignorerade. `/CLAUDE.md` redan tillagt från tidigare.
+
+### Kvarstående efter denna sessions arbete
+
+Två kända problem som inte är blockerande för dev-flödet, dokumenterade i `ToDo.md`:
+
+1. **ClamAV kan inte hämta nya signaturer från `database.clamav.net`.** `backend`-nätverket har `internal: true` (avsiktlig hardening). ClamAV kör med signaturer som följer med imagen vid byggtid. För kursdemo räcker det — för produktion krävs en lösning (sidecar med `freshclam` eller separat dev-overlay).
+2. **ThreatFox API returnerar 403 Forbidden.** Feodo Tracker (4 events) och URLhaus (826 events) fungerar; bara ThreatFox-feeden uteblir. Trolig orsak: API-nyckel formaterad fel i `.env` (whitespace/citationstecken), eller utgången/fel-typ av nyckel. Verifiera på https://auth.abuse.ch/.
+
 ## 2026-03-30
 
 ### CI/CD — Automatisk deploy till Hetzner (least privilege)
