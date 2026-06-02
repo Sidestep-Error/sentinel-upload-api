@@ -82,7 +82,7 @@ services:
   # API — FastAPI / uvicorn
   # --------------------------------------------------------------------------
   api:
-    image: ${DOCKER_IMAGE:-sidesteperror/sentinel-upload-api}:${IMAGE_TAG:-latest}
+    image: ${DOCKER_IMAGE:-jonitsx/sentinel-upload-api}:${IMAGE_TAG:-latest}
     container_name: sentinel_api
     restart: unless-stopped
     build:
@@ -93,25 +93,21 @@ services:
     environment:
       MONGODB_URI: ${MONGODB_URI:-mongodb://${MONGO_USERNAME:-sentinel}:${MONGO_PASSWORD:-change-me}@mongodb:27017/${MONGO_DB:-sentinel_upload}?authSource=admin}
       SCANNER_MODE: ${SCANNER_MODE:-auto}
+      CLAMAV_HOST: ${CLAMAV_HOST:-clamav}
+      CLAMAV_PORT: ${CLAMAV_PORT:-3310}
+      CLAMAV_TIMEOUT_SECONDS: ${CLAMAV_TIMEOUT_SECONDS:-5}
       UPLOAD_RATE_LIMIT_PER_MINUTE: ${UPLOAD_RATE_LIMIT_PER_MINUTE:-10}
       UPLOAD_RATE_LIMIT_WINDOW_SECONDS: ${UPLOAD_RATE_LIMIT_WINDOW_SECONDS:-60}
       UPLOAD_RETENTION_DAYS: ${UPLOAD_RETENTION_DAYS:-30}
       THREAT_RESOLVE_DOMAINS: ${THREAT_RESOLVE_DOMAINS:-false}
+      THREATFOX_API_KEY: ${THREATFOX_API_KEY:-}
+      THREATFOX_API_KEY_FILE: ${THREATFOX_API_KEY_FILE:-}
       AUTH_MODE: ${AUTH_MODE:-off}
     networks:
       - frontend
       - backend
     expose:
       - "8000"
-      - MONGODB_URI=${MONGODB_URI:-mongodb://${MONGO_ROOT_USERNAME:-sentinel}:${MONGO_ROOT_PASSWORD:-change-me}@mongo:27017/${MONGO_DB:-sentinel_upload}?authSource=admin}
-      - SCANNER_MODE=${SCANNER_MODE:-auto}
-      - CLAMAV_HOST=${CLAMAV_HOST:-clamav}
-      - CLAMAV_PORT=${CLAMAV_PORT:-3310}
-      - CLAMAV_TIMEOUT_SECONDS=${CLAMAV_TIMEOUT_SECONDS:-5}
-      - UPLOAD_RATE_LIMIT_PER_MINUTE=${UPLOAD_RATE_LIMIT_PER_MINUTE:-10}
-      - UPLOAD_RATE_LIMIT_WINDOW_SECONDS=${UPLOAD_RATE_LIMIT_WINDOW_SECONDS:-60}
-      - THREATFOX_API_KEY=${THREATFOX_API_KEY:-}
-      - THREATFOX_API_KEY_FILE=${THREATFOX_API_KEY_FILE:-}
     depends_on:
       mongodb:
         condition: service_healthy

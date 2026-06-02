@@ -2,6 +2,7 @@
 .env
 .env.local
 .claude/
+/CLAUDE.md
 
 __pycache__/
 *.pyc
@@ -43,4 +44,13 @@ k8s/overlays/gcp/secret.yaml
 **/*.tfvars
 **/terraform.tfvars.json
 **/.terraform.lock.hcl
+
+# Local-only — not for remote
+/guides/
+/infra/terraform/gke-namespace/
+/docs/individuell-rapport-mall.md
+/docs/individuell-rapport-jon-eskilsson.md
+/docs/Jon-Eskilsson-DevSecOps-Reflektionsrapport-2026.md
+/docs/kunskapssammanfattning-for-grupprojekt.md
+/docs/presentation-gruppresentation.md
 
