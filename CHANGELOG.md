@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-06-02
+
+### `UploadRecord` — `size_bytes`-fält tillagt
+
+- **Feat:** nytt fält `size_bytes: int | None` i `UploadRecord` (`app/models.py`). Optional med `default=None, ge=0` för bakåtkompatibilitet — befintliga dokument i `uploads`-collection utan fältet lyfts in via `model_validate` utan att krascha.
+- **Feat:** `/upload`-handlern sätter nu `size_bytes=len(content)` i både normal- och dedup-pathen (`app/main.py`). Fältet inkluderas i response-payloaden från båda paths.
+- **Motivering:** sentinel-ml:s Spår B (upload-classifier) använder filstorlek som första feature (`math.log1p(size_bytes)`). Utan fältet i Mongo kan ML-modellen inte tränas mot faktisk produktionsdata. Detta är förberedande arbete för sentinel-ml-integrationen.
+- **Tester:** två nya i `tests/test_upload.py` — verifierar att `size_bytes` returneras i response och persisteras till `db.uploads.insert_one` för både ny upload och dedup-fallet.
+
 ## 2026-05-26
 
 ### Docker Compose — fixar efter develop → hotfix/upload-requestheaders-fix merge
