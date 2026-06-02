@@ -22,10 +22,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Installera curl (för healthcheck) och rensa apt-cache direkt
+# Uppgradera bas-paket (Debian security patches) och installera curl för healthcheck.
+# `apt-get upgrade` är nödvändigt — bara `update` hämtar paketlistor utan att
+# applicera tillgängliga säkerhetspatchar på redan installerade paket.
 RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --no-install-recommends && \
     apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # Skapa non-root user och grupp
 # uid/gid 1000 matchar docker-compose user: "1000:1000"
