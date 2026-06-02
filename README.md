@@ -35,7 +35,7 @@ CI pipeline
 - Builds Docker image, runs Trivy scan (fail on fixable HIGH/CRITICAL), and generates SBOM (Syft artifact).
 - Pushes Docker image to Docker Hub on `main` pushes after all checks pass.
 - Automatically deploys to Hetzner (k3s) on `main` pushes via `kubectl rollout restart` using a least-privilege ServiceAccount (`ci-deploy`).
-- Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `sidesteperror/sentinel-upload-api`).
+- Docker Hub secrets required in GitHub: `DOCKER_USERNAME`, `DOCKER_PASSWORD` (token), `DOCKER_IMAGE` (e.g. `jonitsx/sentinel-upload-api`).
 - Hetzner deploy secret required in GitHub: `KUBECONFIG_HETZNER_B64` (base64-encoded kubeconfig for the `ci-deploy` ServiceAccount).
 
 Hetzner — CI/CD least privilege
