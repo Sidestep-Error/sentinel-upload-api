@@ -196,9 +196,14 @@ jobs:
       - name: Determine tags
         id: tags
         run: |
+          # main pushas med :latest (default-tag som teamet pullar i docker compose),
+          # :main (explicit) och :<sha> (immutable pinning).
+          # develop pushas bara med :develop och :<sha> för att undvika att
+          # dev-builds ersätter :latest i Docker Hub.
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             {
               echo "value<<EOF"
+              echo "${{ env.DOCKER_IMAGE }}:latest"
               echo "${{ env.DOCKER_IMAGE }}:main"
               echo "${{ env.DOCKER_IMAGE }}:${{ github.sha }}"
               echo "EOF"
