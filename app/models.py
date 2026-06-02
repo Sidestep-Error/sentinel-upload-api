@@ -7,6 +7,7 @@ class UploadRecord(BaseModel):
     filename: str
     sha256: str
     content_type: str
+    size_bytes: int | None = Field(default=None, ge=0)
     status: str = Field(default="accepted")
     decision: str = Field(default="accepted")
     risk_score: int = Field(default=0, ge=0, le=100)

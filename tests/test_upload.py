@@ -237,3 +237,72 @@ def test_upload_rate_limit_returns_429_when_exceeded(monkeypatch):
         enforce_upload_rate_limit("ci-test-client")
 
     assert exc.value.status_code == 429
+
+
+def test_upload_includes_size_bytes_in_response_and_persistence(client, monkeypatch):
+    class FakeUploads:
+        def __init__(self):
+            self.items = []
+
+        async def find_one(self, _query, _projection):
+            return None
+
+        async def insert_one(self, doc):
+            self.items.append(doc)
+            return object()
+
+    class FakeDB:
+        def __init__(self):
+            self.uploads = FakeUploads()
+
+    fake_db = FakeDB()
+    monkeypatch.setattr("app.main.get_db", lambda: fake_db)
+
+    payload = b"hello world"
+    files = {"file": ("hello.txt", payload, "text/plain")}
+    r = client.post("/upload", files=files)
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["size_bytes"] == len(payload)
+    assert len(fake_db.uploads.items) == 1
+    assert fake_db.uploads.items[0]["size_bytes"] == len(payload)
+
+
+def test_upload_dedup_includes_size_bytes(client, monkeypatch):
+    class FakeUploads:
+        def __init__(self):
+            self.items = []
+
+        async def find_one(self, query, projection):
+            target_hash = query.get("sha256")
+            for item in self.items:
+                if item.get("sha256") == target_hash:
+                    return {
+                        key: value for key, value in item.items()
+                        if key in projection and key != "_id"
+                    }
+            return None
+
+        async def insert_one(self, doc):
+            self.items.append(doc)
+            return object()
+
+    class FakeDB:
+        def __init__(self):
+            self.uploads = FakeUploads()
+
+    fake_db = FakeDB()
+    monkeypatch.setattr("app.main.get_db", lambda: fake_db)
+
+    payload = b"deduplicate me"
+    files = {"file": ("hello.txt", payload, "text/plain")}
+    first = client.post("/upload", files=files)
+    second = client.post("/upload", files=files)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["deduplicated"] is True
+    assert first.json()["size_bytes"] == len(payload)
+    assert second.json()["size_bytes"] == len(payload)
+    assert all(item["size_bytes"] == len(payload) for item in fake_db.uploads.items)
