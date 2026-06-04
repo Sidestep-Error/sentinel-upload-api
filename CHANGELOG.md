@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## 2026-06-04
+
+### NetworkPolicy — tillåt egress till sentinel-ml
+
+- **Sec:** ny egress-regel i `k8s/base/networkpolicy.yaml` som tillåter `sentinel-upload-api`-pods att ringa `sentinel-ml`-pods på port 8100 inom klustret. Tidigare blockerades all sådan trafik av default-deny — kub-policyn nämnde bara DNS, ClamAV, Mongo och HTTPS.
+- **Motivering:** sentinel-ml deployades i `sentinel`-namespace (sentinel-ml PR #39 + first-deploy 2026-06-04). För att UI-integration ska kunna ringa `/predict/threat` och `/predict/upload` på den interna servicen behövs explicit allowlist-regel.
+- **Säkerhetsmodellen behålls:** trafiken tillåts endast till **specifik podSelector** (label `app.kubernetes.io/name: sentinel-ml`) på **specifik port** (8100). Ingen open egress; ingen route till internet. Sentinel-ml:s egen ingress-policy filtrerar redan från andra hållet (bara `sentinel-upload-api`-pods får ringa in).
+- **Verifiering efter rollout:** `kubectl exec -n sentinel deployment/sentinel-upload-api -- curl -sS http://sentinel-ml.sentinel.svc.cluster.local/health` ska returnera `{"status":"ok","version":"0.1.0"}`.
+
 ## 2026-06-02
 
 ### `UploadRecord` — `size_bytes`-fält tillagt
