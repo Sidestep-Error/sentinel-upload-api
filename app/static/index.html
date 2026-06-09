@@ -270,8 +270,12 @@
             scanMlEl.classList.add("status-malicious");
           } else if (pred && typeof pred.confidence === "number") {
             scanMlEl.textContent = `${pred.label} (${pred.confidence.toFixed(2)})`;
-            if (pred.label === "clean") scanMlEl.classList.add("status-clean");
-            else if (pred.label === "malicious") scanMlEl.classList.add("status-malicious");
+            // upload-classifier emits accepted/rejected; threat models clean/malicious.
+            if (pred.label === "clean" || pred.label === "accepted") {
+              scanMlEl.classList.add("status-clean");
+            } else if (pred.label === "malicious" || pred.label === "rejected") {
+              scanMlEl.classList.add("status-malicious");
+            }
           } else {
             scanMlEl.textContent = "ML-data saknas";
           }
