@@ -34,3 +34,8 @@ data:
   THREAT_RESOLVE_DOMAINS: "false"
   THREAT_LOOKBACK_DAYS: "90"
   GEOIP_DB_PATH: "/app/assets/GeoLite2-City.mmdb"
+  # sentinel-ml integration (intern microservice, ingen publik ingress).
+  # Icke-känslig konfig: en flagga, ett internt kluster-DNS-namn och en timeout.
+  SENTINEL_ML_ENABLED: "true"
+  SENTINEL_ML_URL: "http://sentinel-ml.sentinel.svc.cluster.local"
+  SENTINEL_ML_TIMEOUT_MS: "500"
