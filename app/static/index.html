@@ -99,6 +99,7 @@
             <div class="scan-row"><span>Engine</span><strong id="scan-engine">-</strong></div>
             <div class="scan-row"><span>Detail</span><strong id="scan-detail">-</strong></div>
             <div class="scan-row"><span>Deduplicated</span><strong id="scan-dedup">-</strong></div>
+            <div class="scan-row"><span>ML / Threat intel</span><strong id="scan-ml">-</strong></div>
           </div>
           <div class="meta">
             <div>Result updates after each upload.</div>
@@ -192,6 +193,7 @@
       const scanEngineEl = document.getElementById("scan-engine");
       const scanDetailEl = document.getElementById("scan-detail");
       const scanDedupEl = document.getElementById("scan-dedup");
+      const scanMlEl = document.getElementById("scan-ml");
       const devDocsEl = document.getElementById("dev-docs");
       const metricUploads24hEl = document.getElementById("metric-uploads-24h");
       const metricRejected24hEl = document.getElementById("metric-rejected-24h");
@@ -243,6 +245,42 @@
           scanDecisionEl.classList.add("status-malicious");
         } else if (data.decision === "review") {
           scanDecisionEl.classList.add("status-review");
+        }
+
+        updateMlRow(data.sha256);
+      }
+
+      async function updateMlRow(sha256) {
+        // ML/threat-intel enrichment from sentinel-ml (via ml_predictions).
+        // Complementary and fail-silent: a missing prediction (e.g. integration
+        // disabled, or sentinel-ml down) just leaves the row blank.
+        scanMlEl.textContent = "-";
+        scanMlEl.classList.remove("status-clean", "status-malicious");
+        if (!sha256) return;
+        try {
+          const response = await fetch(`/uploads/${sha256}/ml`);
+          if (!response.ok) return; // 404 = no prediction stored
+          const doc = await response.json();
+          const known =
+            (doc.summary && doc.summary.known_malicious_hash) ||
+            (doc.upload_result && doc.upload_result.known_malicious);
+          const pred = doc.upload_result && doc.upload_result.prediction;
+          if (known) {
+            scanMlEl.textContent = "MATCH - känd skadlig hash (threat intel)";
+            scanMlEl.classList.add("status-malicious");
+          } else if (pred && typeof pred.confidence === "number") {
+            scanMlEl.textContent = `${pred.label} (${pred.confidence.toFixed(2)})`;
+            // upload-classifier emits accepted/rejected; threat models clean/malicious.
+            if (pred.label === "clean" || pred.label === "accepted") {
+              scanMlEl.classList.add("status-clean");
+            } else if (pred.label === "malicious" || pred.label === "rejected") {
+              scanMlEl.classList.add("status-malicious");
+            }
+          } else {
+            scanMlEl.textContent = "ML-data saknas";
+          }
+        } catch (error) {
+          // ML is complementary — never let it disturb the UI.
         }
       }
 
