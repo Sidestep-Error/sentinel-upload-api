@@ -20,6 +20,7 @@ from app.models import UploadRecord
 from app.scanner import scan_bytes
 from app.routers import threats
 from app.services.threat_intel import run_threat_intel_update_job, setup_database_indexes
+from app.services import sentinel_ml_client
 from apscheduler.schedulers.background import BackgroundScheduler
 
 logger = logging.getLogger("sentinel")
@@ -388,6 +389,40 @@ def _fetch_kev_summary_remote() -> dict:
     }
 
 
+async def _enrich_with_ml(db, record: UploadRecord) -> None:
+    """Best-effort ML enrichment: call sentinel-ml and persist to ml_predictions.
+
+    Never raises — the ML tier must not affect the upload flow. No-op when the
+    integration is disabled or the DB handle is unavailable.
+    """
+    if db is None or not sentinel_ml_client.SENTINEL_ML_ENABLED:
+        return
+    payload = {
+        "upload": {
+            "upload_id": record.sha256,
+            "filename": record.filename,
+            "content_type": record.content_type,
+            "sha256": record.sha256,
+            "size_bytes": record.size_bytes,
+            "scan_status": record.scan_status,
+            "scan_engine": record.scan_engine,
+            "scan_detail": record.scan_detail,
+            "risk_score": record.risk_score,
+            "source": "upload",
+        }
+    }
+    try:
+        result = await sentinel_ml_client.predict_liveflow(payload)
+        if result is not None:
+            await db.ml_predictions.update_one(
+                {"upload_id": record.sha256},
+                {"$set": {"upload_id": record.sha256, **result}},
+                upsert=True,
+            )
+    except Exception:
+        logger.debug("ML enrichment failed for %s — continuing", record.filename, exc_info=True)
+
+
 @app.post("/upload")
 async def upload(request: Request, file: UploadFile = File(...)):
     client_ip = request.client.host if request.client else "unknown"
@@ -440,6 +475,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 deduplicated=True,
             )
             await db.uploads.insert_one(dedup_record.model_dump())
+            await _enrich_with_ml(db, dedup_record)
             return {
                 "filename": filename,
                 "sha256": file_sha256,
@@ -506,6 +542,9 @@ async def upload(request: Request, file: UploadFile = File(...)):
         logger.exception("Failed to store upload record for %s", filename)
         db_status = "unavailable"
 
+    if db_status == "stored":
+        await _enrich_with_ml(db, record)
+
     return {
         "filename": filename,
         "sha256": file_sha256,
@@ -521,6 +560,16 @@ async def upload(request: Request, file: UploadFile = File(...)):
         "deduplicated": False,
         "db_status": db_status,
     }
+
+
+@app.get("/uploads/{sha256}/ml")
+async def get_upload_ml(sha256: str):
+    """Return the sentinel-ml prediction for a given upload (keyed by sha256)."""
+    db = get_db()
+    doc = await db.ml_predictions.find_one({"upload_id": sha256}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Ingen ML-prediktion för denna uppladdning")
+    return doc
 
 
 @app.get("/uploads")
