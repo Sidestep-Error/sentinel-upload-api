@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## 2026-06-11
+
+### Säkerhetshärdning av UI:t (sec/ui-hardening)
+
+Fullständig motivering och verifieringssteg: `docs/sec-ui-hardening-2026-06.md`.
+
+- **Sec: stored XSS via threat intel-feeds åtgärdad.** Kartans popups och KEV-panelen renderade extern feed-data (URLhaus-IOC:er är angriparinskickade URL:er) som rå HTML via `bindPopup`/`innerHTML`. All extern data byggs nu som DOM-noder med `textContent` (`threatPopupContent()`, återanvänd `detailRow()`).
+- **Sec: säkerhetsheaders sätts nu av appen + ny Content-Security-Policy.** Headers fanns tidigare bara i Compose-nginxen — i prod (k3s ingress → uvicorn) och på Render levererades sidan helt utan. Ny middleware i `app/main.py` sätter `nosniff`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` och en strikt CSP (utan `unsafe-inline`) i alla miljöer. `/docs`/`/redoc` undantas från CSP (Swagger laddar assets från CDN). Headers borttagna ur nginx-configen (en källa till sanning, undviker dubbla headers). Deprecated `X-XSS-Protection` borttagen.
+- **Sec: UI-skriptet flyttat till `app/static/app.js`.** Förutsättning för CSP utan `unsafe-inline`; `index.html` innehåller inte längre något inline-skript.
+- **Sec: SRI på markercluster-filerna från unpkg.** `leaflet.markercluster.js` + två CSS-filer pinnas nu med `sha384`-hashar och `crossorigin` (leaflet.js hade redan SRI). Hashar beräknade från unpkg:s faktiska bytes; metoden korsverifierad mot leaflets kända hash.
+- **Fix: `upload-details`-synlighet förenklad** — enbart CSS-klassen `is-open` styr nu (tidigare även `hidden` + `style.display`).
+- **Fix: språkkonsekvens i UI-värden** — `MATCH - known malicious hash`, `No match`, `No ML data` (UI:t är konsekvent engelskt; dokumentation och commits förblir svenska).
+- **Tester:** nya `tests/test_security_headers.py` låser headers-beteendet inkl. CSP-undantaget och att `X-XSS-Protection` inte återinförs.
+
 ## 2026-06-04
 
 ### NetworkPolicy — tillåt egress till sentinel-ml
