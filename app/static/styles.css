@@ -161,6 +161,10 @@ main > section:first-of-type {
 }
 
 .threat-map {
+  /* Leaflet panes use z-index up to ~1000; contain them in a local
+     stacking context so the map never covers the sticky header. */
+  position: relative;
+  z-index: 0;
   height: 250px;
   border: 1px solid rgba(54, 255, 122, 0.25);
   border-radius: 12px;
@@ -448,7 +452,8 @@ button.button {
 }
 
 .list-item-toggle::after {
-  content: "â–¾";
+  /* U+25BE (dropdown triangle) as an escape — immune to file re-encoding. */
+  content: "\25BE";
   justify-self: end;
   color: var(--muted);
   transition: transform 0.2s ease;
