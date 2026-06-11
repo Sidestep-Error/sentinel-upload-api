@@ -99,7 +99,8 @@
             <div class="scan-row"><span>Engine</span><strong id="scan-engine">-</strong></div>
             <div class="scan-row"><span>Detail</span><strong id="scan-detail">-</strong></div>
             <div class="scan-row"><span>Deduplicated</span><strong id="scan-dedup">-</strong></div>
-            <div class="scan-row"><span title="Sentinel-ML: machine-learning risk assessment of the file's metadata, plus a match against known-malicious file hashes (threat intel).">Machine learning / Threat intel</span><strong id="scan-ml">-</strong></div>
+            <div class="scan-row"><span title="Sentinel-ML: machine-learning risk assessment of the file's metadata.">ML score</span><strong id="scan-ml">-</strong></div>
+            <div class="scan-row"><span title="Match against known-malicious file hashes (threat intel).">Threat intel</span><strong id="scan-ti">-</strong></div>
           </div>
           <div class="meta">
             <div>Result updates after each upload.</div>
@@ -194,6 +195,7 @@
       const scanDetailEl = document.getElementById("scan-detail");
       const scanDedupEl = document.getElementById("scan-dedup");
       const scanMlEl = document.getElementById("scan-ml");
+      const scanTiEl = document.getElementById("scan-ti");
       const devDocsEl = document.getElementById("dev-docs");
       const metricUploads24hEl = document.getElementById("metric-uploads-24h");
       const metricRejected24hEl = document.getElementById("metric-rejected-24h");
@@ -247,15 +249,19 @@
           scanDecisionEl.classList.add("status-review");
         }
 
-        updateMlRow(data.sha256);
+        updateMlRows(data.sha256);
       }
 
-      async function updateMlRow(sha256) {
+      async function updateMlRows(sha256) {
         // ML/threat-intel enrichment from sentinel-ml (via ml_predictions).
         // Complementary and fail-silent: a missing prediction (e.g. integration
-        // disabled, or sentinel-ml down) just leaves the row blank.
+        // disabled, or sentinel-ml down) just leaves the rows blank.
+        // ML score and threat intel are shown on separate rows so it is clear
+        // which of them (or both) blocked the file.
         scanMlEl.textContent = "-";
         scanMlEl.classList.remove("status-clean", "status-malicious");
+        scanTiEl.textContent = "-";
+        scanTiEl.classList.remove("status-clean", "status-malicious");
         if (!sha256) return;
         try {
           const response = await fetch(`/uploads/${sha256}/ml`);
@@ -265,10 +271,16 @@
             (doc.summary && doc.summary.known_malicious_hash) ||
             (doc.upload_result && doc.upload_result.known_malicious);
           const pred = doc.upload_result && doc.upload_result.prediction;
+
           if (known) {
-            scanMlEl.textContent = "MATCH - känd skadlig hash (threat intel)";
-            scanMlEl.classList.add("status-malicious");
-          } else if (pred && typeof pred.confidence === "number") {
+            scanTiEl.textContent = "MATCH - känd skadlig hash";
+            scanTiEl.classList.add("status-malicious");
+          } else {
+            scanTiEl.textContent = "Ingen träff";
+            scanTiEl.classList.add("status-clean");
+          }
+
+          if (pred && typeof pred.confidence === "number") {
             scanMlEl.textContent = `${pred.label} (${pred.confidence.toFixed(2)})`;
             // upload-classifier emits accepted/rejected; threat models clean/malicious.
             if (pred.label === "clean" || pred.label === "accepted") {
