@@ -34,6 +34,46 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(threats.router)
 
+# Security headers are set by the app, not the reverse proxy, so they apply in
+# every environment: in prod (k3s ingress -> uvicorn) and on Render the Compose
+# nginx is not in the request path.
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+}
+
+# Allowlist for the static UI: Leaflet/markercluster from unpkg, Google Fonts,
+# CARTO map tiles. No 'unsafe-inline' -- the UI script lives in /static/app.js.
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' https://unpkg.com",
+        "style-src 'self' https://unpkg.com https://fonts.googleapis.com",
+        "font-src https://fonts.gstatic.com",
+        "img-src 'self' data: https://unpkg.com https://*.basemaps.cartocdn.com",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+
+# Swagger UI / ReDoc load their assets from CDNs the UI policy must not allow.
+CSP_EXEMPT_PATHS = ("/docs", "/redoc")
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in SECURITY_HEADERS.items():
+        response.headers[name] = value
+    if not request.url.path.startswith(CSP_EXEMPT_PATHS):
+        response.headers["Content-Security-Policy"] = CONTENT_SECURITY_POLICY
+    return response
+
 ALLOWED_CONTENT_TYPES = {
     # Text
     "text/plain",
