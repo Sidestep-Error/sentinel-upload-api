@@ -84,6 +84,7 @@
           </div>
           <div class="meta">
             <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
+            <div>Text analysis / IOC extraction currently supports: TXT, MD, CSV, DOCX, XLSX, PPTX</div>
             <div>Endpoint: <code>/upload</code></div>
           </div>
           <button class="button" id="upload-btn" type="button">Upload now</button>
@@ -106,6 +107,7 @@
           <div class="meta">
             <div>Result updates after each upload.</div>
             <div>Text analysis is complementary and does not override the upload decision.</div>
+            <div>Confidence guide: above 80% = strong signal, 50-79% = moderate signal, below 50% = weak signal.</div>
           </div>
         </div>
       </section>
@@ -302,12 +304,19 @@
 
           if (textSummary) {
             scanTextSummaryEl.textContent = textSummary;
-            if (textPred && typeof textPred.label === "string") {
-              if (textPred.label === "clean" || textPred.label === "accepted") {
+            if (textPred && typeof textPred.label === "string" && typeof textPred.confidence === "number") {
+              const label = textPred.label;
+              const confidence = textPred.confidence;
+              const threatLabel = ["phishing", "ransomware", "malware", "intrusion", "ddos"].includes(label);
+              if (label === "clean" || label === "accepted") {
                 scanTextSummaryEl.classList.add("status-clean");
-              } else if (["phishing", "ransomware", "malware", "intrusion", "ddos"].includes(textPred.label)) {
+              } else if (threatLabel && confidence >= 0.8) {
                 scanTextSummaryEl.classList.add("status-malicious");
-              } else if (textPred.label !== "unknown") {
+              } else if (threatLabel && confidence >= 0.5) {
+                scanTextSummaryEl.classList.add("status-review");
+              } else if (threatLabel && confidence < 0.5) {
+                scanTextSummaryEl.classList.add("status-clean");
+              } else if (label !== "unknown") {
                 scanTextSummaryEl.classList.add("status-review");
               }
             }
