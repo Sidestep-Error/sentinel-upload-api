@@ -84,6 +84,7 @@
           </div>
           <div class="meta">
             <div>Allowed types: PDF, PNG, JPG, TXT, MD, CSV, DOC(X), XLS(X), PPT(X), ODT, ODS, ODP</div>
+            <div>Text analysis / IOC extraction currently supports: TXT, MD, CSV, DOCX, XLSX, PPTX</div>
             <div>Endpoint: <code>/upload</code></div>
           </div>
           <button class="button" id="upload-btn" type="button">Upload now</button>
@@ -99,11 +100,14 @@
             <div class="scan-row"><span>Engine</span><strong id="scan-engine">-</strong></div>
             <div class="scan-row"><span>Detail</span><strong id="scan-detail">-</strong></div>
             <div class="scan-row"><span>Deduplicated</span><strong id="scan-dedup">-</strong></div>
-            <div class="scan-row"><span title="Sentinel-ML: machine-learning risk assessment of the file's metadata.">ML score</span><strong id="scan-ml">-</strong></div>
+            <div class="scan-row"><span title="Sentinel-ML metadata-based assessment of the uploaded file.">Metadata analysis</span><strong id="scan-ml">-</strong></div>
+            <div class="scan-row"><span title="Safe text-analysis summary without raw text or IOC values.">Text analysis</span><strong id="scan-text-summary">-</strong></div>
             <div class="scan-row"><span title="Match against known-malicious file hashes (threat intel).">Threat intel</span><strong id="scan-ti">-</strong></div>
           </div>
           <div class="meta">
             <div>Result updates after each upload.</div>
+            <div>Text analysis is complementary and does not override the upload decision.</div>
+            <div>Confidence guide: above 80% = strong signal, 50-79% = moderate signal, below 50% = weak signal.</div>
           </div>
         </div>
       </section>
@@ -195,6 +199,7 @@
       const scanDetailEl = document.getElementById("scan-detail");
       const scanDedupEl = document.getElementById("scan-dedup");
       const scanMlEl = document.getElementById("scan-ml");
+      const scanTextSummaryEl = document.getElementById("scan-text-summary");
       const scanTiEl = document.getElementById("scan-ti");
       const devDocsEl = document.getElementById("dev-docs");
       const metricUploads24hEl = document.getElementById("metric-uploads-24h");
@@ -260,6 +265,8 @@
         // which of them (or both) blocked the file.
         scanMlEl.textContent = "-";
         scanMlEl.classList.remove("status-clean", "status-malicious");
+        scanTextSummaryEl.textContent = "-";
+        scanTextSummaryEl.classList.remove("status-clean", "status-malicious", "status-review");
         scanTiEl.textContent = "-";
         scanTiEl.classList.remove("status-clean", "status-malicious");
         if (!sha256) return;
@@ -271,6 +278,9 @@
             (doc.summary && doc.summary.known_malicious_hash) ||
             (doc.upload_result && doc.upload_result.known_malicious);
           const pred = doc.upload_result && doc.upload_result.prediction;
+          const textResult = doc.upload_text_result || null;
+          const textPred = textResult && textResult.prediction;
+          const textSummary = textResult && textResult.summary;
 
           if (known) {
             scanTiEl.textContent = "MATCH - känd skadlig hash";
@@ -290,6 +300,28 @@
             }
           } else {
             scanMlEl.textContent = "ML-data saknas";
+          }
+
+          if (textSummary) {
+            scanTextSummaryEl.textContent = textSummary;
+            if (textPred && typeof textPred.label === "string" && typeof textPred.confidence === "number") {
+              const label = textPred.label;
+              const confidence = textPred.confidence;
+              const threatLabel = ["phishing", "ransomware", "malware", "intrusion", "ddos"].includes(label);
+              if (label === "clean" || label === "accepted") {
+                scanTextSummaryEl.classList.add("status-clean");
+              } else if (threatLabel && confidence >= 0.8) {
+                scanTextSummaryEl.classList.add("status-malicious");
+              } else if (threatLabel && confidence >= 0.5) {
+                scanTextSummaryEl.classList.add("status-review");
+              } else if (threatLabel && confidence < 0.5) {
+                scanTextSummaryEl.classList.add("status-clean");
+              } else if (label !== "unknown") {
+                scanTextSummaryEl.classList.add("status-review");
+              }
+            }
+          } else {
+            scanTextSummaryEl.textContent = "Ingen textanalys";
           }
         } catch (error) {
           // ML is complementary — never let it disturb the UI.

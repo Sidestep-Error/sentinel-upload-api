@@ -19,6 +19,7 @@ from app.db import get_db, ensure_upload_indexes
 from app.models import UploadRecord
 from app.scanner import scan_bytes
 from app.services.macro_scan import analyze_macros
+from app.services.text_extract import ExtractedText, extract_text
 from app.routers import threats
 from app.services.threat_intel import run_threat_intel_update_job, setup_database_indexes
 from app.services import sentinel_ml_client
@@ -407,7 +408,36 @@ def _fetch_kev_summary_remote() -> dict:
     }
 
 
-async def _enrich_with_ml(db, record: UploadRecord) -> None:
+def _build_upload_text_payload(record: UploadRecord, extracted: ExtractedText | None) -> dict | None:
+    if extracted is None or not extracted.text:
+        return None
+    return {
+        "upload_id": record.sha256,
+        "filename": record.filename,
+        "content_type": record.content_type,
+        "scan_status": record.scan_status,
+        "scan_engine": record.scan_engine,
+        "scan_detail": record.scan_detail,
+        "extracted_text": extracted.text,
+        "source": "upload_text",
+    }
+
+
+def _sanitize_ml_result_for_storage(result: dict) -> dict:
+    stored = dict(result)
+    upload_text_result = stored.get("upload_text_result")
+    if isinstance(upload_text_result, dict):
+        redacted = dict(upload_text_result)
+        redacted.pop("extracted_text", None)
+        stored["upload_text_result"] = redacted
+    return stored
+
+
+async def _enrich_with_ml(
+    db,
+    record: UploadRecord,
+    extracted_text: ExtractedText | None = None,
+) -> None:
     """Best-effort ML enrichment: call sentinel-ml and persist to ml_predictions.
 
     Never raises — the ML tier must not affect the upload flow. No-op when the
@@ -415,7 +445,7 @@ async def _enrich_with_ml(db, record: UploadRecord) -> None:
     """
     if db is None or not sentinel_ml_client.SENTINEL_ML_ENABLED:
         return
-    payload = {
+    payload: dict[str, dict] = {
         "upload": {
             "upload_id": record.sha256,
             "filename": record.filename,
@@ -430,12 +460,16 @@ async def _enrich_with_ml(db, record: UploadRecord) -> None:
             "macro": record.macro,
         }
     }
+    upload_text = _build_upload_text_payload(record, extracted_text)
+    if upload_text is not None:
+        payload["upload_text"] = upload_text
     try:
         result = await sentinel_ml_client.predict_liveflow(payload)
         if result is not None:
+            stored_result = _sanitize_ml_result_for_storage(result)
             await db.ml_predictions.update_one(
                 {"upload_id": record.sha256},
-                {"$set": {"upload_id": record.sha256, **result}},
+                {"$set": {"upload_id": record.sha256, **stored_result}},
                 upsert=True,
             )
     except Exception:
@@ -465,6 +499,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
     # Static VBA-macro features for Office files (None otherwise). Computed
     # before the dedup branch so both stored records carry the same features.
     macro = analyze_macros(filename, content_type, content)
+    extracted_text = extract_text(filename, content_type, content)
 
     db = None
     try:
@@ -499,7 +534,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 macro=macro,
             )
             await db.uploads.insert_one(dedup_record.model_dump())
-            await _enrich_with_ml(db, dedup_record)
+            await _enrich_with_ml(db, dedup_record, extracted_text=extracted_text)
             return {
                 "filename": filename,
                 "sha256": file_sha256,
@@ -569,7 +604,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
         db_status = "unavailable"
 
     if db_status == "stored":
-        await _enrich_with_ml(db, record)
+        await _enrich_with_ml(db, record, extracted_text=extracted_text)
 
     return {
         "filename": filename,
