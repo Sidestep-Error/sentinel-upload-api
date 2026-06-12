@@ -283,10 +283,10 @@
           const textSummary = textResult && textResult.summary;
 
           if (known) {
-            scanTiEl.textContent = "MATCH - känd skadlig hash";
+            scanTiEl.textContent = "MATCH - known malicious hash";
             scanTiEl.classList.add("status-malicious");
           } else {
-            scanTiEl.textContent = "Ingen träff";
+            scanTiEl.textContent = "No match";
             scanTiEl.classList.add("status-clean");
           }
 
