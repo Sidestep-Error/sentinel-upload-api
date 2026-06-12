@@ -16,3 +16,6 @@ class UploadRecord(BaseModel):
     scan_engine: str = Field(default="mock")
     scan_detail: str = Field(default="No signature matched")
     deduplicated: bool = Field(default=False)
+    # Static VBA-macro features (services/macro_scan.py); None for non-Office
+    # files. Shape matches sentinel-ml's MacroAnalysis schema.
+    macro: dict | None = Field(default=None)

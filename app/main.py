@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from app.db import get_db, ensure_upload_indexes
 from app.models import UploadRecord
 from app.scanner import scan_bytes
+from app.services.macro_scan import analyze_macros
 from app.routers import threats
 from app.services.threat_intel import run_threat_intel_update_job, setup_database_indexes
 from app.services import sentinel_ml_client
@@ -227,6 +228,7 @@ def compute_risk(
     scan_status: str,
     scan_engine: str,
     scan_detail: str,
+    macro: dict | None = None,
 ) -> tuple[int, str, list[str]]:
     score = 0
     reasons: list[str] = []
@@ -256,6 +258,22 @@ def compute_risk(
 
     if scan_engine == "mock" and scan_status == "clean":
         reasons.append("Mock engine result should be treated as lower confidence")
+
+    # Static VBA-macro analysis (signature-independent — catches macro malware
+    # that ClamAV has no signature for). Thresholds mirror sentinel-ml's
+    # macro_risk rule so both layers tell the same story.
+    if macro and macro.get("has_macros"):
+        autoexec = int(macro.get("autoexec_keywords", 0))
+        suspicious = int(macro.get("suspicious_keywords", 0))
+        if autoexec >= 1 and suspicious >= 1:
+            score = max(score, 75)
+            reasons.append("VBA macro with auto-execution trigger and suspicious keywords")
+        elif suspicious >= 3:
+            score = max(score, 60)
+            reasons.append("VBA macro with multiple suspicious keywords")
+        else:
+            score = max(score, 30)
+            reasons.append("Office document contains VBA macros")
 
     if score >= 70:
         decision = "rejected"
@@ -409,6 +427,7 @@ async def _enrich_with_ml(db, record: UploadRecord) -> None:
             "scan_detail": record.scan_detail,
             "risk_score": record.risk_score,
             "source": "upload",
+            "macro": record.macro,
         }
     }
     try:
@@ -443,6 +462,10 @@ async def upload(request: Request, file: UploadFile = File(...)):
 
     file_sha256 = sha256(content).hexdigest()
 
+    # Static VBA-macro features for Office files (None otherwise). Computed
+    # before the dedup branch so both stored records carry the same features.
+    macro = analyze_macros(filename, content_type, content)
+
     db = None
     try:
         db = get_db()
@@ -473,6 +496,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
                 scan_engine=existing.get("scan_engine", "unknown"),
                 scan_detail=existing.get("scan_detail", "Matched previous file hash"),
                 deduplicated=True,
+                macro=macro,
             )
             await db.uploads.insert_one(dedup_record.model_dump())
             await _enrich_with_ml(db, dedup_record)
@@ -502,6 +526,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
         scan_status=scan.status,
         scan_engine=scan.engine,
         scan_detail=scan.detail,
+        macro=macro,
     )
     # Keep fail-closed status behavior for compatibility with existing clients.
     status = "accepted" if scan.status == "clean" else "rejected"
@@ -530,6 +555,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
         scan_engine=scan.engine,
         scan_detail=scan.detail,
         deduplicated=False,
+        macro=macro,
     )
 
     db_status = "skipped"
@@ -559,6 +585,7 @@ async def upload(request: Request, file: UploadFile = File(...)):
         "scan_detail": scan.detail,
         "deduplicated": False,
         "db_status": db_status,
+        "macro": macro,
     }
 
 
