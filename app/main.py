@@ -423,6 +423,16 @@ def _build_upload_text_payload(record: UploadRecord, extracted: ExtractedText | 
     }
 
 
+def _sanitize_ml_result_for_storage(result: dict) -> dict:
+    stored = dict(result)
+    upload_text_result = stored.get("upload_text_result")
+    if isinstance(upload_text_result, dict):
+        redacted = dict(upload_text_result)
+        redacted.pop("extracted_text", None)
+        stored["upload_text_result"] = redacted
+    return stored
+
+
 async def _enrich_with_ml(
     db,
     record: UploadRecord,
@@ -456,9 +466,10 @@ async def _enrich_with_ml(
     try:
         result = await sentinel_ml_client.predict_liveflow(payload)
         if result is not None:
+            stored_result = _sanitize_ml_result_for_storage(result)
             await db.ml_predictions.update_one(
                 {"upload_id": record.sha256},
-                {"$set": {"upload_id": record.sha256, **result}},
+                {"$set": {"upload_id": record.sha256, **stored_result}},
                 upsert=True,
             )
     except Exception:

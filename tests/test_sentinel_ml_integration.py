@@ -49,7 +49,16 @@ def test_upload_enriches_and_get_ml_returns_prediction(client, monkeypatch):
             "prediction": {"label": "clean", "confidence": 0.91},
             "model_version": "abc123",
         },
-        "summary": {"has_upload": True, "has_upload_text": False, "has_cve_relevance": False},
+        "upload_text_result": {
+            "upload_id": "placeholder",
+            "source": "upload_text",
+            "prediction": {"label": "phishing", "confidence": 0.67},
+            "model_version": "def456",
+            "iocs": [{"type": "url", "value": "http://evil.example"}],
+            "extracted_text": "hello ml",
+            "text_truncated": False,
+        },
+        "summary": {"has_upload": True, "has_upload_text": True, "has_cve_relevance": False},
     }
     mock_predict = _enable_ml(monkeypatch, ml_result)
 
@@ -66,6 +75,7 @@ def test_upload_enriches_and_get_ml_returns_prediction(client, monkeypatch):
     assert payload["upload_text"]["extracted_text"] == "hello ml"
     assert sha in fake_db.ml_predictions.docs
     assert fake_db.ml_predictions.docs[sha]["upload_id"] == sha
+    assert "extracted_text" not in fake_db.ml_predictions.docs[sha]["upload_text_result"]
 
     # And the lookup route returns it.
     got = client.get(f"/uploads/{sha}/ml")
@@ -73,6 +83,7 @@ def test_upload_enriches_and_get_ml_returns_prediction(client, monkeypatch):
     body = got.json()
     assert body["upload_id"] == sha
     assert body["upload_result"]["prediction"]["label"] == "clean"
+    assert "extracted_text" not in body["upload_text_result"]
 
 
 def test_get_upload_ml_returns_404_when_missing(client, monkeypatch):
